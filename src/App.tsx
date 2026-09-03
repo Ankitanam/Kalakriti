@@ -1,11 +1,11 @@
 import { useState, useRef } from "react";
 import CatalogPreview from "./CatalogPreview";
-import CheckoutScreen from "./CheckoutScreen";
+
 import KalakritiScreen from "./KalakritiScreen";
 import OnboardingScreen from "./OnboardingScreen";
 
 export default function App() {
-  const [screen, setScreen] = useState<"onboarding" | "kalakriti" | "capture" | "preview" | "checkout">("onboarding");
+  const [screen, setScreen] = useState<"onboarding" | "kalakriti" | "capture" | "preview" | "dashboard">("onboarding");
   const [isRecording, setIsRecording] = useState(false);
   const [voiceText, setVoiceText] = useState("");
 
@@ -72,11 +72,16 @@ export default function App() {
     return <KalakritiScreen />;
   }
   if (screen === "preview") {
-    return <CatalogPreview onBack={() => setScreen("capture")} onCheckout={() => setScreen("checkout")} />;
+    return (
+      <CatalogPreview
+        onBack={() => setScreen("capture")}
+        onCheckout={() => setScreen("dashboard")}
+        photoUrl={photoUrl}
+        voiceText={voiceText}
+      />
+    );
   }
-  if (screen === "checkout") {
-    return <CheckoutScreen onBack={() => setScreen("preview")} />;
-  }
+
 
   return (
     <div
@@ -126,6 +131,7 @@ export default function App() {
           style={{ background: "#6B3A2A" }}
         >
           <button
+            onClick={() => setScreen("onboarding")}
             className="w-10 h-10 rounded-full flex items-center justify-center"
             style={{ background: "rgba(255,255,255,0.12)" }}
           >

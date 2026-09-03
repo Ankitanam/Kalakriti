@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-export default function CatalogPreview({ onBack, onCheckout }: { onBack?: () => void; onCheckout?: () => void }) {
+export default function CatalogPreview({ onBack, onCheckout, photoUrl, voiceText }: { onBack?: () => void; onCheckout?: () => void; photoUrl?: string | null; voiceText?: string }) {
     const [activeTab, setActiveTab] = useState<"hindi" | "english">("hindi");
     const [published, setPublished] = useState(false);
 
@@ -91,7 +91,7 @@ export default function CatalogPreview({ onBack, onCheckout }: { onBack?: () => 
                         style={{ height: 240, background: "#F0EBE3" }}
                     >
                         <img
-                            src="https://images.unsplash.com/photo-1604264726154-26480e76f4e1?w=500&h=360&fit=crop&auto=format"
+                            src={photoUrl || "https://images.unsplash.com/photo-1604264726154-26480e76f4e1?w=500&h=360&fit=crop&auto=format"}
                             alt="Handcrafted decorative clay pot"
                             className="w-full h-full object-cover"
                             style={{ mixBlendMode: "multiply" }}
@@ -245,8 +245,7 @@ export default function CatalogPreview({ onBack, onCheckout }: { onBack?: () => 
                                 {activeTab === "hindi" ? (
                                     <>
                                         <p style={{ fontFamily: "'Noto Serif', serif", lineHeight: 1.8 }}>
-                                            यह मिट्टी का घड़ा राजस्थान के कुशल कुम्हार कारीगरों द्वारा हाथ से बनाया गया है।
-                                            परंपरागत तकनीक और प्राकृतिक मिट्टी का उपयोग करके इसे तैयार किया गया है।
+                                            {voiceText ? `🎙️ आपने कहा: "${voiceText}"` : "यह मिट्टी का घड़ा राजस्थान के कुशल कुम्हार कारीगरों द्वारा हाथ से बनाया गया है। परंपरागत तकनीक और प्राकृतिक मिट्टी का उपयोग करके इसे तैयार किया गया है।"}
                                         </p>
                                         <ul className="mt-3 space-y-1.5">
                                             {["सामग्री: प्राकृतिक मिट्टी", "ऊँचाई: 25 सेमी", "वजन: 600 ग्राम", "देखभाल: सूखे कपड़े से साफ करें"].map((item) => (

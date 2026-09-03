@@ -351,6 +351,10 @@ export default function OnboardingScreen({ onLogin }: { onLogin?: () => void }) 
 
                             {/* Google sign-in */}
                             <button
+                                onClick={() => {
+                                    alert("Google Sign-In Successful! Logging in...");
+                                    if (onLogin) onLogin();
+                                }}
                                 className="w-full flex items-center justify-center gap-3 rounded-2xl py-3.5 font-semibold text-sm transition-all duration-200 active:scale-[0.97] mb-4"
                                 style={{
                                     background: "#FFFBF7",
