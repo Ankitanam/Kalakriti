@@ -1,0 +1,24 @@
+# Dependencies (NEVER upload to GitHub)
+node_modules
+/.pnp
+.pnp.js
+
+# Production build output
+dist
+dist-ssr
+*.local
+
+# Environment variables & API keys (Protects your secrets)
+.env
+.env.local
+.env.*.local
+
+# Editor & OS files
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
