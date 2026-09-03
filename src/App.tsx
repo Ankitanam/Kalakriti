@@ -1,7 +1,6 @@
 // src/App.tsx
 import { useState, useRef } from "react";
 import CatalogPreview from "./CatalogPreview";
-import CheckoutScreen from "./CheckoutScreen";
 import KalakritiScreen from "./KalakritiScreen";
 import OnboardingScreen from "./OnboardingScreen";
 
@@ -13,6 +12,7 @@ const CATEGORIES = [
 ];
 
 export default function App() {
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [screen, setScreen] = useState<"onboarding" | "kalakriti" | "capture" | "preview" | "checkout">("onboarding");
   const [isRecording, setIsRecording] = useState(false);
   const [voiceText, setVoiceText] = useState("");
@@ -22,8 +22,6 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form & Voice states
-  const [isRecording, setIsRecording] = useState(false);
-  const [voiceText, setVoiceText] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(0);
 
   // AI & Loading states
@@ -271,12 +269,6 @@ Output ONLY valid JSON matching this schema:
     return <OnboardingScreen onLogin={() => setScreen("capture")} />;
   }
 
-  if (screen === "preview") {
-    return <CatalogPreview onBack={() => setScreen("capture")} onCheckout={() => setScreen("checkout")} />;
-  }
-  if (screen === "checkout") {
-    return <CheckoutScreen onBack={() => setScreen("preview")} />;
-  }
 
 
   // KalaSetu Capture Screen
