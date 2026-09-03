@@ -1,8 +1,44 @@
+// src/CatalogPreview.tsx
 import { useState } from "react";
 
-export default function CatalogPreview({ onBack, onCheckout }: { onBack?: () => void; onCheckout?: () => void }) {
+export interface CatalogData {
+    imageUrl?: string;
+    title_hi?: string;
+    title_en?: string;
+    description_hi?: string;
+    description_en?: string;
+    quick_summary_hi?: string;
+    quick_summary_en?: string;
+    specs_hi?: Array<{ label: string; value: string }>;
+    specs_en?: Array<{ label: string; value: string }>;
+    suggested_price?: number;
+    artisan_name?: string;
+    artisan_region?: string;
+    tags?: string[];
+}
+
+interface CatalogPreviewProps {
+    data?: CatalogData | null;
+    onBack?: () => void;
+    onCheckout?: () => void;
+}
+
+export default function CatalogPreview({ data, onBack, onCheckout }: CatalogPreviewProps) {
     const [activeTab, setActiveTab] = useState<"hindi" | "english">("hindi");
     const [published, setPublished] = useState(false);
+
+    // ── Smart Dynamic Fallbacks ──
+    const titleHi = data?.title_hi || "मधुबनी सूर्य लोककला पेंटिंग";
+    const titleEn = data?.title_en || "Handmade Madhubani Sun Art (Unframed)";
+    const price = data?.suggested_price || 299;
+    const originalPrice = Math.round(price * 1.6); // Competitive strike-through price
+    const artisanName = data?.artisan_name || "माधुरी देवी";
+    const artisanRegion = data?.artisan_region || "मिथिला, बिहार Artisan";
+    const imageUrl = data?.imageUrl || "https://images.unsplash.com/photo-1604264726154-26480e76f4e1?w=500";
+
+    const tags = data?.tags && data.tags.length > 0
+        ? data.tags
+        : ["मधुबनी", "हस्तशिल्प", "ONDC Direct", "Affordable", "Handmade"];
 
     return (
         <div
@@ -27,22 +63,10 @@ export default function CatalogPreview({ onBack, onCheckout }: { onBack?: () => 
                 >
                     <span className="text-xs font-medium text-white/90">9:41</span>
                     <div className="flex items-center gap-2">
-                        <svg width="16" height="12" viewBox="0 0 16 12" fill="none">
-                            <rect x="0" y="3" width="3" height="9" rx="1" fill="white" fillOpacity="0.4" />
-                            <rect x="4.5" y="2" width="3" height="10" rx="1" fill="white" fillOpacity="0.6" />
-                            <rect x="9" y="0" width="3" height="12" rx="1" fill="white" fillOpacity="0.9" />
-                            <rect x="13.5" y="0" width="2.5" height="12" rx="1" fill="white" />
-                        </svg>
-                        <svg width="16" height="12" viewBox="0 0 16 12" fill="none">
-                            <path d="M8 2.5C5.5 2.5 3.2 3.5 1.5 5.2L0 3.7C2.1 1.4 5 0 8 0s5.9 1.4 8 3.7l-1.5 1.5C12.8 3.5 10.5 2.5 8 2.5z" fill="white" />
-                            <path d="M8 6C6.3 6 4.8 6.7 3.7 7.8L2.2 6.3C3.7 4.9 5.7 4 8 4s4.3.9 5.8 2.3L12.3 7.8C11.2 6.7 9.7 6 8 6z" fill="white" fillOpacity="0.8" />
-                            <circle cx="8" cy="10.5" r="1.5" fill="white" />
-                        </svg>
-                        <svg width="26" height="13" viewBox="0 0 26 13" fill="none">
-                            <rect x="0.5" y="0.5" width="22" height="12" rx="3.5" stroke="white" strokeOpacity="0.5" />
-                            <rect x="2" y="2" width="16" height="9" rx="2" fill="white" />
-                            <path d="M24 4.5v4a2 2 0 000-4z" fill="white" fillOpacity="0.5" />
-                        </svg>
+                        <span className="text-xs text-white/80">5G</span>
+                        <div className="w-5 h-2.5 border border-white/60 rounded-sm p-0.5">
+                            <div className="h-full bg-white w-4/5 rounded-xs" />
+                        </div>
                     </div>
                 </div>
 
@@ -52,7 +76,8 @@ export default function CatalogPreview({ onBack, onCheckout }: { onBack?: () => 
                     style={{ background: "#6B3A2A" }}
                 >
                     <button
-                        className="w-10 h-10 rounded-full flex items-center justify-center"
+                        type="button"
+                        className="w-10 h-10 rounded-full flex items-center justify-center transition active:scale-95"
                         style={{ background: "rgba(255,255,255,0.12)" }}
                         onClick={onBack}
                     >
@@ -70,6 +95,7 @@ export default function CatalogPreview({ onBack, onCheckout }: { onBack?: () => 
                         <p className="text-xs text-white/60 -mt-0.5">AI-generated catalog</p>
                     </div>
                     <button
+                        type="button"
                         className="w-10 h-10 rounded-full flex items-center justify-center"
                         style={{ background: "rgba(255,255,255,0.12)" }}
                     >
@@ -87,16 +113,14 @@ export default function CatalogPreview({ onBack, onCheckout }: { onBack?: () => 
                 >
                     {/* Product Image */}
                     <div
-                        className="mx-5 mt-5 rounded-3xl overflow-hidden relative"
-                        style={{ height: 240, background: "#F0EBE3" }}
+                        className="mx-5 mt-5 rounded-3xl overflow-hidden relative shadow-sm"
+                        style={{ height: 250, background: "#F0EBE3" }}
                     >
                         <img
-                            src="https://images.unsplash.com/photo-1604264726154-26480e76f4e1?w=500&h=360&fit=crop&auto=format"
-                            alt="Handcrafted decorative clay pot"
+                            src={imageUrl}
+                            alt={titleEn}
                             className="w-full h-full object-cover"
-                            style={{ mixBlendMode: "multiply" }}
                         />
-                        {/* AI generated tag */}
                         <div
                             className="absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
                             style={{ background: "rgba(255,255,255,0.92)", color: "#6B3A2A", backdropFilter: "blur(8px)" }}
@@ -106,22 +130,11 @@ export default function CatalogPreview({ onBack, onCheckout }: { onBack?: () => 
                             </svg>
                             AI Enhanced
                         </div>
-                        {/* Image counter dots */}
-                        <div className="absolute bottom-3 left-0 right-0 flex items-center justify-center gap-1.5">
-                            {[0, 1, 2].map((i) => (
-                                <div key={i} className="rounded-full" style={{
-                                    width: i === 0 ? 20 : 6,
-                                    height: 6,
-                                    background: i === 0 ? "#6B3A2A" : "rgba(255,255,255,0.7)",
-                                    transition: "width 0.2s",
-                                }} />
-                            ))}
-                        </div>
                     </div>
 
                     {/* Product Details Card */}
                     <div className="mx-5 mt-4 space-y-3">
-                        {/* ONDC Badge */}
+                        {/* ONDC Badges */}
                         <div className="flex items-center gap-2">
                             <span
                                 className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold tracking-wide"
@@ -143,10 +156,10 @@ export default function CatalogPreview({ onBack, onCheckout }: { onBack?: () => 
                                 className="text-2xl font-bold leading-tight"
                                 style={{ color: "#3D1F0F", fontFamily: "'Noto Serif', serif" }}
                             >
-                                सजावटी मिट्टी का घड़ा
+                                {titleHi}
                             </h2>
                             <p className="text-sm font-medium mt-0.5" style={{ color: "#9C6644" }}>
-                                Handcrafted Decorative Clay Pot
+                                {titleEn}
                             </p>
                         </div>
 
@@ -156,10 +169,10 @@ export default function CatalogPreview({ onBack, onCheckout }: { onBack?: () => 
                                 className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white"
                                 style={{ background: "#6B3A2A" }}
                             >
-                                R
+                                {artisanName.charAt(0)}
                             </div>
                             <span className="text-xs" style={{ color: "#9C6644" }}>
-                                Radha Devi · Rajasthan Artisan
+                                {artisanName} · {artisanRegion}
                             </span>
                             <div className="flex items-center gap-0.5 ml-auto">
                                 {[1, 2, 3, 4, 5].map((s) => (
@@ -185,13 +198,13 @@ export default function CatalogPreview({ onBack, onCheckout }: { onBack?: () => 
                                         className="text-3xl font-bold"
                                         style={{ color: "#3D1F0F", fontFamily: "'Noto Serif', serif" }}
                                     >
-                                        ₹150
+                                        ₹{price}
                                     </span>
                                     <span
                                         className="text-base font-medium line-through"
                                         style={{ color: "#B07050" }}
                                     >
-                                        ₹250
+                                        ₹{originalPrice}
                                     </span>
                                 </div>
                                 <p className="text-xs mt-0.5" style={{ color: "#9C6644" }}>
@@ -210,10 +223,11 @@ export default function CatalogPreview({ onBack, onCheckout }: { onBack?: () => 
                         {/* Divider */}
                         <div style={{ height: 1, background: "rgba(196,136,107,0.2)" }} />
 
-                        {/* Tabs */}
+                        {/* ── Tabs & Pointwise Tabular Specs ── */}
                         <div>
-                            <div className="flex rounded-xl overflow-hidden" style={{ background: "rgba(196,136,107,0.1)", padding: 3 }}>
+                            <div className="flex rounded-xl overflow-hidden mb-3" style={{ background: "rgba(196,136,107,0.1)", padding: 3 }}>
                                 <button
+                                    type="button"
                                     onClick={() => setActiveTab("hindi")}
                                     className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all duration-200"
                                     style={{
@@ -225,6 +239,7 @@ export default function CatalogPreview({ onBack, onCheckout }: { onBack?: () => 
                                     हिंदी विवरण
                                 </button>
                                 <button
+                                    type="button"
                                     onClick={() => setActiveTab("english")}
                                     className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all duration-200"
                                     style={{
@@ -237,52 +252,68 @@ export default function CatalogPreview({ onBack, onCheckout }: { onBack?: () => 
                                 </button>
                             </div>
 
-                            {/* Tab content */}
-                            <div
-                                className="mt-3 rounded-2xl p-4 text-sm leading-relaxed"
-                                style={{ background: "#FFF8F3", border: "1.5px solid rgba(196,136,107,0.15)", color: "#5A2E12" }}
+                            {/* Summary sentence */}
+                            <p className="text-xs font-medium text-[#5A2E12] mb-3 px-1 leading-relaxed">
+                                {activeTab === "hindi" 
+                                    ? (data?.quick_summary_hi || data?.description_hi || "हस्तनिर्मित प्रामाणिक भारतीय लोककला।")
+                                    : (data?.quick_summary_en || data?.description_en || "Authentic handmade Indian craft by rural creators.")}
+                            </p>
+
+                            {/* ── Pointwise Tabular Specifications ── */}
+                            <div 
+                                className="rounded-2xl overflow-hidden shadow-xs" 
+                                style={{ border: "1.5px solid rgba(196,136,107,0.25)", background: "#FFFBF7" }}
                             >
-                                {activeTab === "hindi" ? (
-                                    <>
-                                        <p style={{ fontFamily: "'Noto Serif', serif", lineHeight: 1.8 }}>
-                                            यह मिट्टी का घड़ा राजस्थान के कुशल कुम्हार कारीगरों द्वारा हाथ से बनाया गया है।
-                                            परंपरागत तकनीक और प्राकृतिक मिट्टी का उपयोग करके इसे तैयार किया गया है।
-                                        </p>
-                                        <ul className="mt-3 space-y-1.5">
-                                            {["सामग्री: प्राकृतिक मिट्टी", "ऊँचाई: 25 सेमी", "वजन: 600 ग्राम", "देखभाल: सूखे कपड़े से साफ करें"].map((item) => (
-                                                <li key={item} className="flex items-start gap-2">
-                                                    <span style={{ color: "#C4886B" }}>•</span>
-                                                    <span style={{ fontFamily: "'Noto Serif', serif" }}>{item}</span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </>
-                                ) : (
-                                    <>
-                                        <p style={{ lineHeight: 1.8 }}>
-                                            A beautifully hand-thrown decorative clay pot crafted by master potters from Rajasthan.
-                                            Made using traditional wheel-throwing techniques with locally sourced terracotta clay.
-                                        </p>
-                                        <ul className="mt-3 space-y-1.5">
-                                            {["Material: Natural terracotta clay", "Height: 25 cm", "Weight: 600g", "Care: Wipe with dry cloth"].map((item) => (
-                                                <li key={item} className="flex items-start gap-2">
-                                                    <span style={{ color: "#C4886B" }}>•</span>
-                                                    <span>{item}</span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </>
-                                )}
+                                <div className="px-3.5 py-2.5 border-b flex items-center justify-between" style={{ background: "rgba(107,58,42,0.06)", borderColor: "rgba(196,136,107,0.2)" }}>
+                                    <span className="text-[11px] font-bold uppercase tracking-wider text-[#6B3A2A]">
+                                        {activeTab === "hindi" ? "📋 उत्पाद विवरण (Specs)" : "📋 Product Details"}
+                                    </span>
+                                    <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                                        ONDC सत्यापित
+                                    </span>
+                                </div>
+
+                                <div className="divide-y text-xs" style={{ borderColor: "rgba(196,136,107,0.15)" }}>
+                                    {(activeTab === "hindi" 
+                                        ? (data?.specs_hi || [
+                                            { label: "कला शैली", value: "मधुबनी / मिथिला लोककला" },
+                                            { label: "सामग्री", value: "हस्तनिर्मित कागज़ + प्राकृतिक रंग" },
+                                            { label: "आकार", value: "A4 शीट (~8x11 इंच)" },
+                                            { label: "फ्रेम", value: "बिना फ्रेम (सुरक्षित रोल पैकिंग)" },
+                                            { label: "उपयोग", value: "दीवार सज्जा, लिविंग रूम, उपहार" }
+                                        ])
+                                        : (data?.specs_en || [
+                                            { label: "Art Form", value: "Mithila / Madhubani Folk Art" },
+                                            { label: "Material", value: "Handmade Paper & Eco Dyes" },
+                                            { label: "Size", value: "A4 Sheet (~8x11 inches)" },
+                                            { label: "Framing", value: "Unframed (Safe Roll Packing)" },
+                                            { label: "Best For", value: "Wall Decor, Study, Cultural Gift" }
+                                        ])
+                                    ).map((spec: { label: string; value: string }, idx: number) => (
+                                        <div 
+                                            key={idx} 
+                                            className="grid grid-cols-12 px-3.5 py-2.5 items-center transition hover:bg-[#FFF4EC]"
+                                            style={{ background: idx % 2 === 0 ? "#FFFFFF" : "#FFFBF7" }}
+                                        >
+                                            <span className="col-span-4 font-semibold text-[#8B4513] text-[11px]">
+                                                {spec.label}
+                                            </span>
+                                            <span className="col-span-8 text-[#3D1F0F] font-medium leading-snug">
+                                                {spec.value}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
 
-                        {/* SEO / keywords chip row */}
+                        {/* AI-Generated Tags */}
                         <div>
-                            <p className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: "#9C6644" }}>
+                            <p className="text-xs font-semibold uppercase tracking-widest mb-2 mt-4" style={{ color: "#9C6644" }}>
                                 AI-Generated Tags
                             </p>
                             <div className="flex flex-wrap gap-2">
-                                {["मिट्टी के बर्तन", "Pottery", "Handmade", "Eco-friendly", "Rajasthan", "Home Décor", "Gift"].map((tag) => (
+                                {tags.map((tag: string) => (
                                     <span
                                         key={tag}
                                         className="px-3 py-1 rounded-full text-xs font-medium"
@@ -317,6 +348,8 @@ export default function CatalogPreview({ onBack, onCheckout }: { onBack?: () => 
                     ) : (
                         <div className="flex gap-3">
                             <button
+                                type="button"
+                                onClick={onBack}
                                 className="flex items-center justify-center gap-2 rounded-2xl py-4 font-semibold text-sm transition-all duration-200 active:scale-95"
                                 style={{
                                     flex: "0 0 auto",
@@ -326,13 +359,10 @@ export default function CatalogPreview({ onBack, onCheckout }: { onBack?: () => 
                                     border: "2px solid #6B3A2A",
                                 }}
                             >
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                                    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" stroke="#6B3A2A" strokeWidth="2" strokeLinecap="round" />
-                                    <path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke="#6B3A2A" strokeWidth="2" strokeLinecap="round" />
-                                </svg>
                                 Edit
                             </button>
                             <button
+                                type="button"
                                 onClick={() => { setPublished(true); setTimeout(() => onCheckout?.(), 600); }}
                                 className="flex-1 flex items-center justify-center gap-2 rounded-2xl py-4 font-semibold text-sm transition-all duration-200 active:scale-[0.97]"
                                 style={{
@@ -341,10 +371,6 @@ export default function CatalogPreview({ onBack, onCheckout }: { onBack?: () => 
                                     boxShadow: "0 8px 28px rgba(107,58,42,0.38)",
                                 }}
                             >
-                                <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
-                                    <path d="M22 2L11 13" stroke="white" strokeWidth="2" strokeLinecap="round" />
-                                    <path d="M22 2L15 22l-4-9-9-4 20-7z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
                                 Approve &amp; Publish
                             </button>
                         </div>
