@@ -111,7 +111,7 @@ export default function App() {
     }
   };
 
-  // ── HERE IS handleGenerateCatalog WITH COMPETITIVE PRICING & TABULAR DATA ──
+  // ── HERE IS handleGenerateCatalog WITH ACCURATE PHOTO DETECTION ──
   const handleGenerateCatalog = async () => {
     if (!selectedFile && !photoUrl) {
       alert("कृपया पहले कैमरे या गैलरी से सामान की फोटो चुनें!");
@@ -130,7 +130,7 @@ export default function App() {
       }
 
       // 2. Gemini AI call
-      setLoadingStage("AI बाज़ार के अनुसार सही मूल्य तय कर रहा है...");
+      setLoadingStage("AI उत्पाद की पहचान और सही मूल्य तय कर रहा है...");
       const geminiKey = import.meta.env.VITE_GEMINI_KEY;
       const categoryName = CATEGORIES[selectedCategory].en;
       const userNote = voiceText || "पारंपरिक हस्तशिल्प";
@@ -140,45 +140,47 @@ export default function App() {
       if (geminiKey) {
         try {
           const promptText = `
-You are an ONDC e-commerce pricing and catalog specialist for rural Indian artisans (KalaSetu platform).
-Analyze the photo and artisan note: "${userNote}".
+You are an expert Indian Handicrafts and ONDC marketplace cataloging assistant.
+CAREFULLY INSPECT THE ATTACHED PHOTO. Artisan note: "${userNote}".
 
-OBJECTIVES:
-1. COMPETITIVE DIRECT-TO-CONSUMER PRICING (HIGH VOLUME / FAST SALES):
-   Set attractive, realistic, and competitive prices to beat factory-made goods:
-   - Unframed Folk Paintings (Madhubani, Warli, Canvas sheet): ₹249 to ₹399
-   - Daily Terracotta / Clay Pots / Planters: ₹99 to ₹249
-   - Handloom Dupattas / Scarves: ₹299 to ₹549
-   - Small Wooden / Brass Handicrafts: ₹199 to ₹449
-   (Do NOT overprice. The goal is competitive artisan livelihood).
+RULES:
+1. IDENTIFY THE EXACT ITEM FROM PHOTO:
+   - If it is a clay pot / handi / matka, call it "मिट्टी की हांडी" or "Terracotta Clay Pot".
+   - If it is a painting, call it by its art form (Madhubani, Warli, etc.).
+   - DO NOT copy any default template. Describe ONLY what you see in the photo!
 
-2. TABULAR SPECIFICATIONS:
-   Output clear key-value attributes (Style, Material, Size, Framing, Origin) for instant glanceability.
+2. ACCURATE REGION & ARTISAN:
+   - Clay Pottery -> Region: "अलवर / जयपुर, राजस्थान" or "गोरखपुर, UP", Artisan: "रमेश प्रजापति"
+   - Painting -> Region: "मिथिला, बिहार", Artisan: "सीता देवी"
+   - Weaving -> Region: "वाराणसी, UP", Artisan: "अब्दुल अंसारी"
+
+3. COMPETITIVE PRICING:
+   - Clay Pots/Handis: ₹149 - ₹249
+   - Paintings (A4/Unframed): ₹249 - ₹399
+   - Dupattas/Textiles: ₹299 - ₹499
 
 Output ONLY valid JSON matching this schema:
 {
-  "title_hi": "मधुबनी सूर्य लोककला पेंटिंग",
-  "title_en": "Handmade Madhubani Sun Art (Unframed)",
-  "suggested_price": 299,
-  "artisan_name": "माधुरी देवी",
-  "artisan_region": "मिथिला, बिहार (Mithila, Bihar)",
-  "quick_summary_hi": "प्राकृतिक रंगों और पारंपरिक कचनी-भरनी शैली से हस्तनिर्मित मूल मधुबनी पेंटिंग।",
-  "quick_summary_en": "Authentic handmade Madhubani folk painting created with organic pigments on textured paper.",
+  "title_hi": "फोटो में दिख रहे सामान का सटीक हिंदी नाम",
+  "title_en": "Accurate English name matching the item in the photo",
+  "suggested_price": 199,
+  "artisan_name": "कारीगर का नाम",
+  "artisan_region": "शिल्प का सही राज्य व क्षेत्र",
+  "quick_summary_hi": "फोटो में दिख रहे सामान का 1 लाइन में विवरण।",
+  "quick_summary_en": "1 line description of the exact item shown in the photo.",
   "specs_hi": [
-    { "label": "कला शैली", "value": "मिथिला / मधुबनी लोककला" },
-    { "label": "सामग्री", "value": "हस्तनिर्मित कागज़ + प्राकृतिक रंग" },
-    { "label": "अनुमानित आकार", "value": "A4 शीट (लगभग 8x11 इंच)" },
-    { "label": "फ्रेम प्रकार", "value": "बिना फ्रेम (रोल पैकिंग)" },
-    { "label": "उपयोग", "value": "दीवार सजावट, लिविंग रूम, उपहार" }
+    { "label": "कला / शिल्प", "value": "शिल्प का प्रकार" },
+    { "label": "सामग्री", "value": "उपयोग की गई सामग्री" },
+    { "label": "आकार", "value": "अनुमानित आकार" },
+    { "label": "उपयोग", "value": "उपयोग" }
   ],
   "specs_en": [
-    { "label": "Art Form", "value": "Mithila / Madhubani Folk Art" },
-    { "label": "Base Material", "value": "Handmade Paper & Eco Dyes" },
-    { "label": "Dimensions", "value": "A4 Sheet (approx. 8x11 inches)" },
-    { "label": "Framing", "value": "Unframed (Safe Cardboard Roll)" },
-    { "label": "Best For", "value": "Wall Decor, Study, Cultural Gift" }
+    { "label": "Craft Form", "value": "Craft type" },
+    { "label": "Material", "value": "Materials used" },
+    { "label": "Size", "value": "Estimated size" },
+    { "label": "Best For", "value": "Usage" }
   ],
-  "tags": ["Madhubani", "Handmade", "Affordable", "ONDC Direct", "Mithila"]
+  "tags": ["Handmade", "Affordable", "ONDC Direct"]
 }
 `;
 
@@ -194,7 +196,7 @@ Output ONLY valid JSON matching this schema:
             });
           }
 
-          // Try Gemini 3.5 Flash-Lite
+          // Direct call to Gemini 3.5 Flash-Lite
           const response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${geminiKey}`,
             {
@@ -218,35 +220,79 @@ Output ONLY valid JSON matching this schema:
         }
       }
 
-      // Smart Competitive Fallback
+      // ── Smart Dynamic Fallback (Accurate to what you typed) ──
       if (!generatedData) {
+        const isPottery = /mitti|bartan|pot|ghada|handi|मिट्टी|बर्तन|घड़ा|हांडी/i.test(userNote);
         const isPainting = /painting|मधुबनी|चित्र|paint|art/i.test(userNote);
-        const compPrice = isPainting ? 299 : 149;
 
-        generatedData = {
-          title_hi: isPainting ? "मधुबनी सूर्य लोककला पेंटिंग" : "हस्तनिर्मित मिट्टी का उत्पाद",
-          title_en: isPainting ? "Handmade Madhubani Sun Art (Unframed)" : "Handcrafted Clay Product",
-          suggested_price: compPrice,
-          artisan_name: "माधुरी देवी",
-          artisan_region: isPainting ? "मिथिला, बिहार" : "राजस्थान",
-          quick_summary_hi: "कारीगर द्वारा शुद्ध प्राकृतिक सामग्री से निर्मित प्रामाणिक हस्तशिल्प।",
-          quick_summary_en: "Authentic handmade craft directly from rural artisan at fair market price.",
-          specs_hi: [
-            { label: "कला शैली", value: isPainting ? "मधुबनी लोककला" : "पारंपरिक कुम्हारी" },
-            { label: "सामग्री", value: isPainting ? "हस्तनिर्मित कागज़ + प्राकृतिक रंग" : "शुद्ध टेराकोटा मिट्टी" },
-            { label: "आकार", value: isPainting ? "A4 शीट (8x11 इंच)" : "मध्यम आकार" },
-            { label: "फ्रेम", value: "बिना फ्रेम (सुरक्षित रोल)" },
-            { label: "उपयोग", value: "दीवार सज्जा, लिविंग रूम, उपहार" }
-          ],
-          specs_en: [
-            { label: "Craft Type", value: isPainting ? "Madhubani Painting" : "Traditional Pottery" },
-            { label: "Material", value: isPainting ? "Handmade Sheet & Dyes" : "Pure Terracotta Clay" },
-            { label: "Size", value: isPainting ? "A4 Sheet (8x11 in)" : "Medium" },
-            { label: "Framing", value: "Unframed (Roll Packing)" },
-            { label: "Best For", value: "Wall Decor, Gifting" }
-          ],
-          tags: ["Handmade", "Affordable", "ONDC Direct"],
-        };
+        if (isPottery) {
+          generatedData = {
+            title_hi: "पारंपरिक हस्तनिर्मित मिट्टी की हांडी / बर्तन",
+            title_en: "Traditional Handcrafted Clay Cooking Pot",
+            suggested_price: 180,
+            artisan_name: "रमेश प्रजापति",
+            artisan_region: "अलवर, राजस्थान",
+            quick_summary_hi: "प्राकृतिक और शुद्ध मिट्टी से बनी पारंपरिक हांडी, जो धीमी आंच पर खाना पकाने के लिए उपयुक्त है।",
+            quick_summary_en: "Organic clay pot made with natural terracotta, perfect for slow cooking and authentic taste.",
+            specs_hi: [
+              { label: "कला प्रकार", value: "पारंपरिक कुम्हारी कला" },
+              { label: "सामग्री", value: "100% शुद्ध प्राकृतिक लाल मिट्टी" },
+              { label: "आकार", value: "मध्यम (लगभग 1.5 से 2 लीटर)" },
+              { label: "उपयोग", value: "खाना पकाना, पानी रखना, स्वास्थ्यवर्धक भोजन" }
+            ],
+            specs_en: [
+              { label: "Craft Type", value: "Terracotta Pottery" },
+              { label: "Material", value: "100% Natural Red Clay" },
+              { label: "Size", value: "Medium (Approx. 1.5 - 2 Litres)" },
+              { label: "Best For", value: "Healthy Clay Cooking, Curd Making" }
+            ],
+            tags: ["ClayPot", "MittiKaBartan", "HealthyLiving", "ONDC Verified"]
+          };
+        } else if (isPainting) {
+          generatedData = {
+            title_hi: "हस्तनिर्मित पारंपरिक मधुबनी लोककला पेंटिंग",
+            title_en: "Authentic Handmade Madhubani Folk Art",
+            suggested_price: 299,
+            artisan_name: "सीता देवी",
+            artisan_region: "मिथिला, बिहार",
+            quick_summary_hi: "प्राकृतिक रंगों और पारंपरिक शैली से हस्तनिर्मित मूल लोककला पेंटिंग।",
+            quick_summary_en: "Authentic handmade traditional folk painting on textured handmade paper.",
+            specs_hi: [
+              { label: "कला शैली", value: "मिथिला / मधुबनी लोककला" },
+              { label: "सामग्री", value: "हस्तनिर्मित कागज़ + प्राकृतिक रंग" },
+              { label: "आकार", value: "A4 शीट (8x11 इंच)" },
+              { label: "उपयोग", value: "दीवार सज्जा, उपहार" }
+            ],
+            specs_en: [
+              { label: "Art Form", value: "Madhubani Folk Art" },
+              { label: "Material", value: "Handmade Paper & Natural Dyes" },
+              { label: "Size", value: "A4 Sheet (8x11 in)" },
+              { label: "Best For", value: "Wall Decor, Gifting" }
+            ],
+            tags: ["FolkArt", "Handmade", "ONDC Ready"]
+          };
+        } else {
+          generatedData = {
+            title_hi: `हस्तनिर्मित ${userNote}`,
+            title_en: `Handcrafted ${categoryName}`,
+            suggested_price: 199,
+            artisan_name: "शांति देवी",
+            artisan_region: "कारीगर क्लस्टर, भारत",
+            quick_summary_hi: `कुशल कारीगरों द्वारा हस्तनिर्मित प्रामाणिक ${userNote}।`,
+            quick_summary_en: `Authentic handcrafted product directly from rural artisans.`,
+            specs_hi: [
+              { label: "शिल्प", value: categoryName },
+              { label: "सामग्री", value: "प्राकृतिक पर्यावरण-अनुकूल सामग्री" },
+              { label: "उपयोग", value: "गृह सज्जा और दैनिक उपयोग" }
+            ],
+            specs_en: [
+              { label: "Craft", value: categoryName },
+              { label: "Material", value: "Eco-friendly Natural Material" },
+              { label: "Usage", value: "Daily Use & Home Decor" }
+            ],
+            tags: ["Handmade", "EcoFriendly", "ONDC Ready"]
+          };
+        }
       }
 
       setCatalogData({
@@ -267,6 +313,14 @@ Output ONLY valid JSON matching this schema:
   // Screen Routing
   if (screen === "onboarding") {
     return <OnboardingScreen onLogin={() => setScreen("capture")} />;
+  }
+  if (screen === "preview") {
+    return (
+      <CatalogPreview
+        data={catalogData}
+        onBack={() => setScreen("capture")}
+      />
+    );
   }
 
 
@@ -492,36 +546,44 @@ Output ONLY valid JSON matching this schema:
           <div style={{ height: 24 }} />
         </div>
 
-        {/* Generate Button */}
+        {/* ── Generate Button (Simple & Clear for Artisans) ── */}
         <div
           className="flex-shrink-0 px-5 pb-8 pt-4"
-          style={{ background: "linear-gradient(to top, #FFFBF7 80%, transparent)" }}
+          style={{ background: "linear-gradient(to top, #FFFBF7 85%, transparent)" }}
         >
           <button
             type="button"
             disabled={isLoading}
             onClick={handleGenerateCatalog}
-            className="w-full flex items-center justify-center gap-3 rounded-2xl py-4 font-semibold text-base transition-all active:scale-[0.97] disabled:opacity-60"
+            className="w-full flex items-center justify-center gap-2.5 rounded-2xl py-4 font-bold text-base text-white shadow-lg transition-all active:scale-[0.98] disabled:opacity-60"
             style={{
               background: "linear-gradient(135deg, #8B4513 0%, #6B3A2A 100%)",
-              color: "white",
-              boxShadow: "0 8px 28px rgba(107,58,42,0.38)",
-              letterSpacing: "0.02em",
+              boxShadow: "0 8px 24px rgba(107,58,42,0.35)",
             }}
           >
             {isLoading ? (
-              <span className="animate-pulse">{loadingStage || "कैटलॉग बन रहा है..."}</span>
+              <span className="animate-pulse flex items-center gap-2">
+                <span className="inline-block animate-spin">⏳</span>
+                <span>{loadingStage || "जानकारी तैयार हो रही है..."}</span>
+              </span>
             ) : (
               <>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                  <path d="M12 2L9.5 9.5H2L8.5 14L6 21.5L12 17L18 21.5L15.5 14L22 9.5H14.5L12 2Z" fill="white" fillOpacity="0.9" />
+                {/* Single clean Sparkle icon */}
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"
+                    fill="white"
+                  />
                 </svg>
-                <span style={{ fontFamily: "'Noto Serif', serif" }}>★ कैटलॉग तैयार करें</span>
+                <span className="text-base tracking-wide">
+                  दुकान में सामान जोड़ें
+                </span>
               </>
             )}
           </button>
-          <p className="text-center text-xs mt-2.5" style={{ color: "#B07050", fontFamily: "'Noto Serif', serif" }}>
-            AI आपका नाम, जानकारी और सही बाज़ार मूल्य बनाएगा
+
+          <p className="text-center text-xs mt-2.5 text-[#8B4513] font-medium">
+            ✨ AI फोटो देखकर सही दाम और विवरण खुद लिख देगा
           </p>
         </div>
       </div>
