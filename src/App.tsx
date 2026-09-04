@@ -1,35 +1,178 @@
 // src/App.tsx
 import { useState, useRef } from "react";
-import CatalogPreview from "./CatalogPreview";
-import KalakritiScreen from "./KalakritiScreen";
+import CatalogPreview, { CatalogData } from "./CatalogPreview";
 import OnboardingScreen from "./OnboardingScreen";
 
+// 1. Categories including Painting (चित्रकारी)
 const CATEGORIES = [
+  { hi: "चित्रकारी", en: "Painting" },
   { hi: "मिट्टी", en: "Pottery" },
   { hi: "बुनाई", en: "Weaving" },
   { hi: "लकड़ी", en: "Wood" },
   { hi: "कढ़ाई", en: "Embroidery" },
 ];
 
-export default function App() {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [screen, setScreen] = useState<"onboarding" | "kalakriti" | "capture" | "preview" | "checkout">("onboarding");
-  const [isRecording, setIsRecording] = useState(false);
-  const [voiceText, setVoiceText] = useState("");
+export interface StoreItem extends CatalogData {
+  id: string;
+  quantity: number; // 👈 Stock / Quantity Support
+  publishedAt?: string;
+  categoryName?: string;
+}
 
-  // Updated state for camera functionality
+const INITIAL_SEED: StoreItem[] = [
+  {
+    id: "seed-1",
+    title_hi: "मधुबनी सूर्य लोककला पेंटिंग",
+    title_en: "Handmade Madhubani Sun Art (Unframed)",
+    suggested_price: 299,
+    quantity: 1,
+    imageUrl: "https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=500",
+    artisan_name: "माधुरी देवी",
+    artisan_region: "मिथिला, बिहार",
+    quick_summary_hi: "पारंपरिक मिथिला शैली में हस्तनिर्मित सुंदर मधुबनी पेंटिंग।",
+    quick_summary_en: "Authentic handmade traditional folk painting on handmade paper.",
+    specs_hi: [
+      { label: "कला / शिल्प", value: "मधुबनी पेंटिंग" },
+      { label: "सामग्री", value: "हैंडमेड पेपर और प्राकृतिक रंग" },
+      { label: "आकार", value: "A4 आकार" },
+      { label: "उपयोग", value: "गृह सज्जा और उपहार" }
+    ],
+    specs_en: [
+      { label: "Art Form", value: "Madhubani Folk Art" },
+      { label: "Material", value: "Handmade Paper & Natural Dyes" },
+      { label: "Size", value: "A4 Sheet" },
+      { label: "Best For", value: "Wall Decor, Gifting" }
+    ],
+    tags: ["मधुबनी", "Painting", "ONDC Live"],
+    publishedAt: "आज"
+  }
+];
+
+export default function App() {
+  // Login Session
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("artisan_logged_in") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  // Current Screen
+  const [screen, setScreen] = useState<"onboarding" | "capture" | "preview" | "dashboard">(() => {
+    try {
+      const loggedIn = localStorage.getItem("artisan_logged_in") === "true";
+      return loggedIn ? "dashboard" : "onboarding";
+    } catch {
+      return "onboarding";
+    }
+  });
+
+  // Inventory list with quantity
+  const [inventory, setInventory] = useState<StoreItem[]>(() => {
+    try {
+      const saved = localStorage.getItem("kalakriti_inventory");
+      return saved ? JSON.parse(saved) : INITIAL_SEED;
+    } catch {
+      return INITIAL_SEED;
+    }
+  });
+
+  // Form states
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Form & Voice states
+  const [isRecording, setIsRecording] = useState(false);
+  const [voiceText, setVoiceText] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(0);
 
-  // AI & Loading states
   const [isLoading, setIsLoading] = useState(false);
   const [loadingStage, setLoadingStage] = useState("");
-  const [catalogData, setCatalogData] = useState<any>(null);
+  const [selectedPreviewItem, setSelectedPreviewItem] = useState<CatalogData | null>(null);
 
-  // Handle Photo Pick
+  const handleLoginSuccess = () => {
+    localStorage.setItem("artisan_logged_in", "true");
+    setIsLoggedIn(true);
+    setScreen("capture"); // Opens photo upload first
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("artisan_logged_in");
+    setIsLoggedIn(false);
+    setScreen("onboarding");
+  };
+
+  // ── Stock / Quantity Handlers ──
+  const handleIncreaseQty = (id: string) => {
+    const updated = inventory.map((item) =>
+      item.id === id ? { ...item, quantity: (item.quantity || 1) + 1 } : item
+    );
+    setInventory(updated);
+    localStorage.setItem("kalakriti_inventory", JSON.stringify(updated));
+  };
+
+  const handleDecreaseQty = (id: string) => {
+    const target = inventory.find((item) => item.id === id);
+    if (!target) return;
+
+    if (target.quantity > 1) {
+      const updated = inventory.map((item) =>
+        item.id === id ? { ...item, quantity: item.quantity - 1 } : item
+      );
+      setInventory(updated);
+      localStorage.setItem("kalakriti_inventory", JSON.stringify(updated));
+    } else {
+      handleRemoveProduct(id);
+    }
+  };
+
+  const handleRemoveProduct = (id: string) => {
+    if (window.confirm("क्या आप इस उत्पाद को दुकान से हटाना चाहते हैं?")) {
+      const updated = inventory.filter((item) => item.id !== id);
+      setInventory(updated);
+      localStorage.setItem("kalakriti_inventory", JSON.stringify(updated));
+    }
+  };
+
+  // Save product and handle duplicates by adding to quantity
+  const saveProductToInventory = (catalogItem: CatalogData) => {
+    // Check if an item with the same title already exists
+    const existingIndex = inventory.findIndex(
+      (item) => item.title_hi.trim() === catalogItem.title_hi?.trim()
+    );
+
+    let updatedList: StoreItem[];
+    if (existingIndex > -1) {
+      // Instead of duplicate card, increase stock quantity!
+      updatedList = inventory.map((item, idx) =>
+        idx === existingIndex
+          ? { ...item, quantity: (item.quantity || 1) + 1, imageUrl: catalogItem.imageUrl || item.imageUrl }
+          : item
+      );
+    } else {
+      const newEntry: StoreItem = {
+        id: Date.now().toString(),
+        ...catalogItem,
+        quantity: 1, // default stock 1
+        publishedAt: "आज",
+        categoryName: CATEGORIES[selectedCategory].en,
+      };
+      updatedList = [newEntry, ...inventory];
+    }
+
+    setInventory(updatedList);
+    try {
+      localStorage.setItem("kalakriti_inventory", JSON.stringify(updatedList));
+    } catch (e) {
+      console.warn("Could not save to localStorage:", e);
+    }
+
+    setSelectedFile(null);
+    setPhotoUrl(null);
+    setVoiceText("");
+  };
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -38,7 +181,6 @@ export default function App() {
     }
   };
 
-  // Helper: Convert File to base64
   const fileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -48,7 +190,6 @@ export default function App() {
     });
   };
 
-  // Upload to Cloudinary
   const uploadToCloudinary = async (file: File) => {
     const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
     const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
@@ -68,50 +209,41 @@ export default function App() {
       });
 
       if (!res.ok) return { originalUrl: photoUrl || "", enhancedUrl: photoUrl || "" };
-
       const data = await res.json();
       const enhancedUrl = `https://res.cloudinary.com/${cloudName}/image/upload/e_improve,q_auto,f_auto/${data.public_id}.${data.format || "jpg"}`;
       return { originalUrl: data.secure_url, enhancedUrl };
-    } catch (e) {
-      console.warn("Cloudinary upload fallback:", e);
+    } catch {
       return { originalUrl: photoUrl || "", enhancedUrl: photoUrl || "" };
     }
   };
 
-  // Voice recording
   const handleMicToggle = () => {
     if (isRecording) {
       setIsRecording(false);
     } else {
       setVoiceText("");
       setIsRecording(true);
-
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (SpeechRecognition) {
         const recognition = new SpeechRecognition();
         recognition.lang = "hi-IN";
         recognition.interimResults = true;
-
         recognition.onresult = (event: any) => {
-          const transcript = Array.from(event.results)
-            .map((result: any) => result[0].transcript)
-            .join("");
+          const transcript = Array.from(event.results).map((r: any) => r[0].transcript).join("");
           setVoiceText(transcript);
         };
-
         recognition.onend = () => setIsRecording(false);
         recognition.onerror = () => setIsRecording(false);
         recognition.start();
       } else {
         setTimeout(() => {
           setIsRecording(false);
-          if (!voiceText) setVoiceText("यह हाथ से बनी पारंपरिक मधुबनी पेंटिंग है।");
+          if (!voiceText) setVoiceText("यह हाथ से बनी मधुबनी पेंटिंग है।");
         }, 1200);
       }
     }
   };
 
-  // ── HERE IS handleGenerateCatalog WITH ACCURATE PHOTO DETECTION ──
   const handleGenerateCatalog = async () => {
     if (!selectedFile && !photoUrl) {
       alert("कृपया पहले कैमरे या गैलरी से सामान की फोटो चुनें!");
@@ -120,72 +252,63 @@ export default function App() {
 
     try {
       setIsLoading(true);
-
-      // 1. Cloudinary upload
       setLoadingStage("फोटो सुधारी जा रही है (Cloudinary)...");
+
       let finalImageUrl = photoUrl || "";
       if (selectedFile) {
         const cloudResult = await uploadToCloudinary(selectedFile);
         finalImageUrl = cloudResult.enhancedUrl || photoUrl || "";
       }
 
-      // 2. Gemini AI call
-      setLoadingStage("AI उत्पाद की पहचान और सही मूल्य तय कर रहा है...");
+      setLoadingStage("AI उत्पाद की पहचान कर सही विवरण बना रहा है...");
       const geminiKey = import.meta.env.VITE_GEMINI_KEY;
       const categoryName = CATEGORIES[selectedCategory].en;
-      const userNote = voiceText || "पारंपरिक हस्तशिल्प";
+      const userNote = voiceText || "हस्तशिल्प उत्पाद";
 
       let generatedData: any = null;
 
       if (geminiKey) {
         try {
           const promptText = `
-You are an expert Indian Handicrafts and ONDC marketplace cataloging assistant.
-CAREFULLY INSPECT THE ATTACHED PHOTO. Artisan note: "${userNote}".
+You are an expert Indian Handicrafts catalog specialist for Kalakriti on ONDC.
+Carefully inspect the attached photo. User note: "${userNote}". Category: "${categoryName}".
 
-RULES:
-1. IDENTIFY THE EXACT ITEM FROM PHOTO:
-   - If it is a clay pot / handi / matka, call it "मिट्टी की हांडी" or "Terracotta Clay Pot".
-   - If it is a painting, call it by its art form (Madhubani, Warli, etc.).
-   - DO NOT copy any default template. Describe ONLY what you see in the photo!
-
-2. ACCURATE REGION & ARTISAN:
-   - Clay Pottery -> Region: "अलवर / जयपुर, राजस्थान" or "गोरखपुर, UP", Artisan: "रमेश प्रजापति"
-   - Painting -> Region: "मिथिला, बिहार", Artisan: "सीता देवी"
-   - Weaving -> Region: "वाराणसी, UP", Artisan: "अब्दुल अंसारी"
-
-3. COMPETITIVE PRICING:
-   - Clay Pots/Handis: ₹149 - ₹249
-   - Paintings (A4/Unframed): ₹249 - ₹399
-   - Dupattas/Textiles: ₹299 - ₹499
+CRITICAL INSTRUCTIONS:
+1. IDENTIFY WHAT IS ACTUALLY IN THE PHOTO:
+   - If it's a painting / wall art: describe it as a painting (Madhubani, Mithila, Warli, etc.).
+   - If it's pottery / terracotta: describe it as a clay pot / handi.
+   - DO NOT mix up painting with clay pot!
+2. PRICING:
+   - Painting: ₹249 to ₹399
+   - Pottery / Clay: ₹149 to ₹249
+3. CONCISE SPECIFICATIONS: Material, size, usage.
 
 Output ONLY valid JSON matching this schema:
 {
-  "title_hi": "फोटो में दिख रहे सामान का सटीक हिंदी नाम",
-  "title_en": "Accurate English name matching the item in the photo",
-  "suggested_price": 199,
+  "title_hi": "सटीक हिंदी नाम (जैसे: हस्तनिर्मित मधुबनी पेंटिंग या मिट्टी की हांडी)",
+  "title_en": "Accurate English name matching photo",
+  "suggested_price": 299,
   "artisan_name": "कारीगर का नाम",
-  "artisan_region": "शिल्प का सही राज्य व क्षेत्र",
-  "quick_summary_hi": "फोटो में दिख रहे सामान का 1 लाइन में विवरण।",
-  "quick_summary_en": "1 line description of the exact item shown in the photo.",
+  "artisan_region": "क्षेत्र व राज्य",
+  "quick_summary_hi": "फोटो में दिख रहे सामान का 1-2 लाइन में विवरण।",
+  "quick_summary_en": "1-2 lines description matching the photo.",
   "specs_hi": [
     { "label": "कला / शिल्प", "value": "शिल्प का प्रकार" },
     { "label": "सामग्री", "value": "उपयोग की गई सामग्री" },
-    { "label": "आकार", "value": "अनुमानित आकार" },
+    { "label": "आकार", "value": "आकार" },
     { "label": "उपयोग", "value": "उपयोग" }
   ],
   "specs_en": [
     { "label": "Craft Form", "value": "Craft type" },
-    { "label": "Material", "value": "Materials used" },
-    { "label": "Size", "value": "Estimated size" },
+    { "label": "Material", "value": "Materials" },
+    { "label": "Size", "value": "Size" },
     { "label": "Best For", "value": "Usage" }
   ],
-  "tags": ["Handmade", "Affordable", "ONDC Direct"]
+  "tags": ["Handmade", "Kalakriti", "ONDC Verified"]
 }
 `;
 
           let parts: any[] = [{ text: promptText }];
-
           if (selectedFile) {
             const base64Data = await fileToBase64(selectedFile);
             parts.push({
@@ -196,7 +319,6 @@ Output ONLY valid JSON matching this schema:
             });
           }
 
-          // Direct call to Gemini 3.5 Flash-Lite
           const response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${geminiKey}`,
             {
@@ -220,89 +342,90 @@ Output ONLY valid JSON matching this schema:
         }
       }
 
-      // ── Smart Dynamic Fallback (Accurate to what you typed) ──
+      // Dynamic Fallback
       if (!generatedData) {
-        const isPottery = /mitti|bartan|pot|ghada|handi|मिट्टी|बर्तन|घड़ा|हांडी/i.test(userNote);
-        const isPainting = /painting|मधुबनी|चित्र|paint|art/i.test(userNote);
+        const isPainting = /painting|मधुबनी|चित्र|paint|art|चित्रकारी/i.test(userNote + categoryName);
+        const isPottery = /mitti|bartan|pot|ghada|handi|मिट्टी|बर्तन/i.test(userNote + categoryName);
 
-        if (isPottery) {
+        if (isPainting) {
           generatedData = {
-            title_hi: "पारंपरिक हस्तनिर्मित मिट्टी की हांडी / बर्तन",
-            title_en: "Traditional Handcrafted Clay Cooking Pot",
+            title_hi: "पारंपरिक मधुबनी लोककला पेंटिंग",
+            title_en: "Handmade Madhubani Folk Painting",
+            suggested_price: 299,
+            artisan_name: "माधुरी देवी",
+            artisan_region: "मिथिला, बिहार",
+            quick_summary_hi: "प्राकृतिक रंगों और पारंपरिक मिथिला शैली में हस्तनिर्मित प्रामाणिक पेंटिंग।",
+            quick_summary_en: "Authentic handmade traditional Mithila folk painting with natural dyes.",
+            specs_hi: [
+              { label: "कला / शिल्प", value: "मधुबनी लोककला" },
+              { label: "सामग्री", value: "हैंडमेड पेपर एवं प्राकृतिक रंग" },
+              { label: "आकार", value: "A4 शीट" },
+              { label: "उपयोग", value: "गृह सज्जा और उपहार" }
+            ],
+            specs_en: [
+              { label: "Craft Form", value: "Madhubani Folk Art" },
+              { label: "Material", value: "Handmade Paper & Natural Dyes" },
+              { label: "Size", value: "A4 Sheet" },
+              { label: "Best For", value: "Home Decor & Gifting" }
+            ],
+            tags: ["मधुबनी", "Painting", "ONDC Live"]
+          };
+        } else if (isPottery) {
+          generatedData = {
+            title_hi: "हस्तनिर्मित पारंपरिक मिट्टी की हांडी",
+            title_en: "Traditional Handcrafted Terracotta Pot",
             suggested_price: 180,
             artisan_name: "रमेश प्रजापति",
             artisan_region: "अलवर, राजस्थान",
-            quick_summary_hi: "प्राकृतिक और शुद्ध मिट्टी से बनी पारंपरिक हांडी, जो धीमी आंच पर खाना पकाने के लिए उपयुक्त है।",
-            quick_summary_en: "Organic clay pot made with natural terracotta, perfect for slow cooking and authentic taste.",
+            quick_summary_hi: "शुद्ध प्राकृतिक लाल मिट्टी से बनी पारंपरिक हांडी।",
+            quick_summary_en: "Organic terracotta pot made with natural red clay.",
             specs_hi: [
-              { label: "कला प्रकार", value: "पारंपरिक कुम्हारी कला" },
-              { label: "सामग्री", value: "100% शुद्ध प्राकृतिक लाल मिट्टी" },
-              { label: "आकार", value: "मध्यम (लगभग 1.5 से 2 लीटर)" },
-              { label: "उपयोग", value: "खाना पकाना, पानी रखना, स्वास्थ्यवर्धक भोजन" }
+              { label: "कला / शिल्प", value: "पारंपरिक कुम्हारी" },
+              { label: "सामग्री", value: "100% प्राकृतिक मिट्टी" },
+              { label: "आकार", value: "मध्यम (~1.5 लीटर)" },
+              { label: "उपयोग", value: "खाना पकाना, जल संचयन" }
             ],
             specs_en: [
-              { label: "Craft Type", value: "Terracotta Pottery" },
-              { label: "Material", value: "100% Natural Red Clay" },
-              { label: "Size", value: "Medium (Approx. 1.5 - 2 Litres)" },
-              { label: "Best For", value: "Healthy Clay Cooking, Curd Making" }
+              { label: "Craft Form", value: "Terracotta Pottery" },
+              { label: "Material", value: "Natural Red Clay" },
+              { label: "Size", value: "Medium (~1.5 L)" },
+              { label: "Best For", value: "Cooking & Decor" }
             ],
-            tags: ["ClayPot", "MittiKaBartan", "HealthyLiving", "ONDC Verified"]
-          };
-        } else if (isPainting) {
-          generatedData = {
-            title_hi: "हस्तनिर्मित पारंपरिक मधुबनी लोककला पेंटिंग",
-            title_en: "Authentic Handmade Madhubani Folk Art",
-            suggested_price: 299,
-            artisan_name: "सीता देवी",
-            artisan_region: "मिथिला, बिहार",
-            quick_summary_hi: "प्राकृतिक रंगों और पारंपरिक शैली से हस्तनिर्मित मूल लोककला पेंटिंग।",
-            quick_summary_en: "Authentic handmade traditional folk painting on textured handmade paper.",
-            specs_hi: [
-              { label: "कला शैली", value: "मिथिला / मधुबनी लोककला" },
-              { label: "सामग्री", value: "हस्तनिर्मित कागज़ + प्राकृतिक रंग" },
-              { label: "आकार", value: "A4 शीट (8x11 इंच)" },
-              { label: "उपयोग", value: "दीवार सज्जा, उपहार" }
-            ],
-            specs_en: [
-              { label: "Art Form", value: "Madhubani Folk Art" },
-              { label: "Material", value: "Handmade Paper & Natural Dyes" },
-              { label: "Size", value: "A4 Sheet (8x11 in)" },
-              { label: "Best For", value: "Wall Decor, Gifting" }
-            ],
-            tags: ["FolkArt", "Handmade", "ONDC Ready"]
+            tags: ["ClayPot", "Pottery", "ONDC Ready"]
           };
         } else {
           generatedData = {
             title_hi: `हस्तनिर्मित ${userNote}`,
             title_en: `Handcrafted ${categoryName}`,
             suggested_price: 199,
-            artisan_name: "शांति देवी",
-            artisan_region: "कारीगर क्लस्टर, भारत",
+            artisan_name: "कारीगर साथी",
+            artisan_region: "भारत",
             quick_summary_hi: `कुशल कारीगरों द्वारा हस्तनिर्मित प्रामाणिक ${userNote}।`,
-            quick_summary_en: `Authentic handcrafted product directly from rural artisans.`,
+            quick_summary_en: `Authentic handcrafted item directly from rural artisans.`,
             specs_hi: [
               { label: "शिल्प", value: categoryName },
-              { label: "सामग्री", value: "प्राकृतिक पर्यावरण-अनुकूल सामग्री" },
+              { label: "सामग्री", value: "पर्यावरण-अनुकूल सामग्री" },
               { label: "उपयोग", value: "गृह सज्जा और दैनिक उपयोग" }
             ],
             specs_en: [
               { label: "Craft", value: categoryName },
-              { label: "Material", value: "Eco-friendly Natural Material" },
-              { label: "Usage", value: "Daily Use & Home Decor" }
+              { label: "Material", value: "Eco-friendly Material" },
+              { label: "Usage", value: "Daily Use & Decor" }
             ],
-            tags: ["Handmade", "EcoFriendly", "ONDC Ready"]
+            tags: ["Handmade", "ONDC Ready"]
           };
         }
       }
 
-      setCatalogData({
+      const finalPayload: CatalogData = {
         ...generatedData,
         imageUrl: finalImageUrl,
-      });
+      };
 
+      saveProductToInventory(finalPayload);
+      setSelectedPreviewItem(finalPayload);
       setScreen("preview");
     } catch (err: any) {
-      console.error("Processing failed:", err);
       alert("त्रुटि: " + (err.message || err));
     } finally {
       setIsLoading(false);
@@ -310,26 +433,265 @@ Output ONLY valid JSON matching this schema:
     }
   };
 
-  // Screen Routing
-  if (screen === "onboarding") {
-    return <OnboardingScreen onLogin={() => setScreen("capture")} />;
+  // ── ROUTING ──
+
+  if (!isLoggedIn || screen === "onboarding") {
+    return <OnboardingScreen onLogin={handleLoginSuccess} />;
   }
-  if (screen === "preview") {
+
+  if (screen === "preview" && selectedPreviewItem) {
     return (
       <CatalogPreview
-        data={catalogData}
+        data={selectedPreviewItem}
         onBack={() => setScreen("capture")}
+        onCheckout={() => setScreen("dashboard")}
       />
     );
   }
 
+  // ── DASHBOARD (मेरी दुकान) WITH QUANTITY MANAGEMENT ──
+  if (screen === "dashboard") {
+    const totalUnits = inventory.reduce((sum, item) => sum + (item.quantity || 1), 0);
 
+    return (
+      <div
+        className="size-full flex items-center justify-center"
+        style={{ background: "#EDE0D4", fontFamily: "'Poppins', sans-serif" }}
+      >
+        <div
+          className="relative flex flex-col overflow-hidden"
+          style={{
+            width: "min(390px, 100vw)",
+            height: "min(844px, 100vh)",
+            background: "#FFFBF7",
+            borderRadius: "clamp(0px, 2vw, 28px)",
+            boxShadow: "0 24px 80px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.08)",
+          }}
+        >
+          {/* Status Bar */}
+          <div
+            className="flex items-center justify-between px-6 pt-3 pb-1 flex-shrink-0"
+            style={{ background: "#6B3A2A" }}
+          >
+            <span className="text-xs font-medium text-white/90">9:41</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-white/80">5G</span>
+              <div className="w-5 h-2.5 border border-white/60 rounded-sm p-0.5">
+                <div className="h-full bg-white w-4/5 rounded-xs" />
+              </div>
+            </div>
+          </div>
 
-  // KalaSetu Capture Screen
+          {/* Top Bar (Kalakriti Rebranded) */}
+          <div
+            className="flex items-center px-4 py-3 gap-3 flex-shrink-0"
+            style={{ background: "#6B3A2A" }}
+          >
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="w-10 h-10 rounded-2xl flex items-center justify-center text-white active:scale-95 transition"
+              style={{ background: "rgba(255,255,255,0.15)" }}
+              title="लॉगआउट"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M15 18l-6-6 6-6" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+
+            <div className="flex-1">
+              <h1
+                className="text-xl font-bold text-white tracking-wide"
+                style={{ fontFamily: "'Noto Serif', serif" }}
+              >
+                मेरी दुकान
+              </h1>
+              <p className="text-xs text-white/70 -mt-0.5">
+                Kalakriti • ONDC प्रमाणित स्टोर
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="px-2.5 py-1 rounded-full text-[10px] font-bold text-white bg-red-900/70 border border-red-300/30 active:scale-95"
+            >
+              लॉगआउट
+            </button>
+          </div>
+
+          {/* Body */}
+          <div
+            className="flex-1 overflow-y-auto px-4 py-4 space-y-4"
+            style={{ scrollbarWidth: "none", paddingBottom: 110 }}
+          >
+            {/* Stats Banner */}
+            <div
+              className="rounded-2xl p-4 flex items-center justify-between"
+              style={{
+                background: "linear-gradient(135deg, #FFF0E6 0%, #FDE7D8 100%)",
+                border: "1.5px solid rgba(196,136,107,0.3)",
+              }}
+            >
+              <div>
+                <p className="text-xs font-semibold text-[#8B4513] uppercase tracking-wider">
+                  कुल सामान व स्टॉक
+                </p>
+                <h2
+                  className="text-2xl font-extrabold text-[#3D1F0F] mt-0.5"
+                  style={{ fontFamily: "'Noto Serif', serif" }}
+                >
+                  {inventory.length} प्रकार ({totalUnits} पीस)
+                </h2>
+                <p className="text-[11px] text-[#9C6644] mt-0.5">
+                  ONDC पर पूरे भारत में लाइव
+                </p>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-[#6B3A2A] text-white flex items-center justify-center text-xl shadow-md">
+                🛍️
+              </div>
+            </div>
+
+            {/* Inventory List Header */}
+            <div className="flex items-center justify-between pt-1">
+              <h3
+                className="text-base font-bold text-[#3D1F0F]"
+                style={{ fontFamily: "'Noto Serif', serif" }}
+              >
+                दुकान का सामान (Inventory)
+              </h3>
+              <span className="text-xs text-[#9C6644]">मात्रा बदलें या हटाएं</span>
+            </div>
+
+            {/* ── 2-Column Product Grid with Stock / Quantity Control ── */}
+            {inventory.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="text-4xl mb-2">📦</div>
+                <h4 className="font-bold text-[#3D1F0F]">दुकान में कोई सामान नहीं है</h4>
+                <p className="text-xs text-[#9C6644] mt-1">नीचे दिए गए बटन से नया सामान जोड़ें!</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {inventory.map((item) => (
+                  <div
+                    key={item.id}
+                    onClick={() => {
+                      setSelectedPreviewItem(item);
+                      setScreen("preview");
+                    }}
+                    className="rounded-2xl overflow-hidden bg-white shadow-xs border flex flex-col cursor-pointer transition-all hover:shadow-md"
+                    style={{ borderColor: "rgba(196,136,107,0.25)" }}
+                  >
+                    {/* Thumbnail */}
+                    <div className="relative h-36 bg-[#F0EBE3] overflow-hidden">
+                      <img
+                        src={item.imageUrl}
+                        alt={item.title_en}
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute top-2 left-2 bg-white/95 px-2 py-0.5 rounded-md text-[9px] font-bold text-[#6B3A2A]">
+                        ONDC Active
+                      </div>
+                    </div>
+
+                    {/* Metadata & Controls */}
+                    <div className="p-3 flex-1 flex flex-col justify-between">
+                      <div>
+                        <h4
+                          className="font-bold text-xs text-[#3D1F0F] line-clamp-1 leading-tight"
+                          style={{ fontFamily: "'Noto Serif', serif" }}
+                        >
+                          {item.title_hi}
+                        </h4>
+                        <p className="text-[10px] text-[#8B4513] line-clamp-1 mt-0.5">
+                          {item.title_en}
+                        </p>
+                        <p className="text-sm font-extrabold text-[#3D1F0F] mt-1">
+                          ₹{item.suggested_price}
+                        </p>
+                      </div>
+
+                      {/* ── Quantity Controller (+ / -) ── */}
+                      <div className="mt-2.5 pt-2 border-t border-stone-100 flex items-center justify-between">
+                        <span className="text-[11px] font-semibold text-[#8B4513]">मात्रा:</span>
+                        <div className="flex items-center gap-1.5 bg-[#FFF0E5] px-1.5 py-0.5 rounded-lg border border-[#EAC9B0]">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDecreaseQty(item.id);
+                            }}
+                            className="w-5 h-5 rounded-md bg-white text-[#6B3A2A] font-bold text-xs flex items-center justify-center shadow-xs active:scale-90"
+                            title="मात्रा घटाएं"
+                          >
+                            −
+                          </button>
+                          <span className="font-bold text-xs text-[#3D1F0F] min-w-4 text-center">
+                            {item.quantity || 1}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleIncreaseQty(item.id);
+                            }}
+                            className="w-5 h-5 rounded-md bg-[#6B3A2A] text-white font-bold text-xs flex items-center justify-center shadow-xs active:scale-90"
+                            title="मात्रा बढ़ाएं"
+                          >
+                            ＋
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* ── Clear Hindi Visual Remove Button ── */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveProduct(item.id);
+                        }}
+                        className="w-full mt-2 py-1 rounded-lg text-[11px] font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 flex items-center justify-center gap-1 active:scale-95 transition"
+                      >
+                        <span>🗑️</span>
+                        <span>हटाएं (Remove)</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Sticky Bottom Bar */}
+          <div
+            className="absolute bottom-0 left-0 right-0 px-5 pb-7 pt-4 flex-shrink-0"
+            style={{ background: "linear-gradient(to top, #FFFBF7 85%, transparent)" }}
+          >
+            <button
+              type="button"
+              onClick={() => setScreen("capture")}
+              className="w-full flex items-center justify-center gap-2 rounded-2xl py-4 font-bold text-base text-white shadow-lg transition-all active:scale-[0.98]"
+              style={{
+                background: "linear-gradient(135deg, #8B4513 0%, #6B3A2A 100%)",
+                boxShadow: "0 8px 24px rgba(107,58,42,0.35)",
+              }}
+            >
+              <span className="text-xl leading-none">＋</span>
+              <span style={{ fontFamily: "'Noto Serif', serif" }}>
+                नया सामान जोड़ें (Add Product)
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── CAPTURE SCREEN (Rebranded Kalakriti with Painting option) ──
   return (
     <div
       className="size-full flex items-center justify-center"
-      style={{ background: "#F5EFE7", fontFamily: "'Poppins', sans-serif" }}
+      style={{ background: "#EDE0D4", fontFamily: "'Poppins', sans-serif" }}
     >
       <div
         className="relative flex flex-col overflow-hidden"
@@ -355,44 +717,53 @@ Output ONLY valid JSON matching this schema:
           </div>
         </div>
 
-        {/* Top App Bar */}
+        {/* Top App Bar with working Back button to Dashboard */}
         <div
           className="flex items-center px-4 py-3 gap-3 flex-shrink-0"
           style={{ background: "#6B3A2A" }}
         >
           <button
-            className="w-10 h-10 rounded-full flex items-center justify-center"
+            type="button"
+            onClick={() => setScreen("dashboard")}
+            className="w-10 h-10 rounded-full flex items-center justify-center text-white active:scale-95 transition"
             style={{ background: "rgba(255,255,255,0.12)" }}
+            title="दुकान पर वापस जाएं"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
               <path d="M15 18l-6-6 6-6" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
+
+          {/* Rebranded to Kalakriti */}
           <div className="flex-1">
-            <h1 className="text-xl font-bold text-white tracking-wide" style={{ fontFamily: "'Noto Serif', serif" }}>
-              KalaSetu
+            <h1
+              className="text-xl font-bold text-white tracking-wide"
+              style={{ fontFamily: "'Noto Serif', serif" }}
+            >
+              Kalakriti
             </h1>
-            <p className="text-xs text-white/60 -mt-0.5">आपकी अपनी ऑनलाइन दुकान</p>
+            <p className="text-xs text-white/70 -mt-0.5">आपकी अपनी ऑनलाइन दुकान</p>
           </div>
+
           <button
             type="button"
-            className="w-10 h-10 rounded-full flex items-center justify-center"
-            style={{ background: "rgba(255,255,255,0.12)" }}
+            onClick={() => setScreen("dashboard")}
+            className="px-3 py-1.5 rounded-full text-xs font-bold text-[#6B3A2A] bg-[#EDE0D4] transition active:scale-95"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="8" r="3" stroke="white" strokeWidth="2" />
-              <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="white" strokeWidth="2" strokeLinecap="round" />
-            </svg>
+            दुकान ({inventory.length})
           </button>
         </div>
 
-        {/* Scrollable content */}
+        {/* Form Body */}
         <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5" style={{ scrollbarWidth: "none" }}>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: "#9C6644" }}>
+            <p className="text-xs font-semibold uppercase tracking-widest mb-1 text-[#9C6644]">
               नया सामान
             </p>
-            <h2 className="text-2xl font-bold" style={{ color: "#3D1F0F", fontFamily: "'Noto Serif', serif" }}>
+            <h2
+              className="text-2xl font-bold text-[#3D1F0F]"
+              style={{ fontFamily: "'Noto Serif', serif" }}
+            >
               नया सामान बेचें
             </h2>
           </div>
@@ -426,60 +797,52 @@ Output ONLY valid JSON matching this schema:
                     alt="Uploaded Product"
                     className="w-full h-full object-cover"
                   />
-                  <div className="absolute inset-0" style={{ background: "rgba(61,31,15,0.2)" }} />
+                  <div className="absolute inset-0 bg-black/25" />
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center shadow" style={{ background: "rgba(255,255,255,0.95)" }}>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                        <path d="M20 7h-3.2l-1.4-2H8.6L7.2 7H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2z" stroke="#6B3A2A" strokeWidth="1.8" />
-                        <circle cx="12" cy="13" r="3" stroke="#6B3A2A" strokeWidth="1.8" />
-                      </svg>
-                    </div>
                     <span className="text-white font-semibold text-sm drop-shadow">फोटो ली ✓</span>
                     <span className="text-white/90 text-xs drop-shadow">दोबारा फोटो लें</span>
                   </div>
                 </>
               ) : (
-                <>
-                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-1" style={{ background: "rgba(196,136,107,0.15)" }}>
-                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none">
-                      <path d="M20 7h-3.2l-1.4-2H8.6L7.2 7H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2z" stroke="#9C6644" strokeWidth="1.8" />
-                      <circle cx="12" cy="13" r="3.5" stroke="#9C6644" strokeWidth="1.8" />
-                    </svg>
+                <div className="text-center p-4">
+                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-2 mx-auto bg-amber-100/60 text-2xl">
+                    📷
                   </div>
-                  <span className="font-bold text-base" style={{ color: "#6B3A2A", fontFamily: "'Noto Serif', serif" }}>
+                  <span
+                    className="font-bold text-base text-[#6B3A2A]"
+                    style={{ fontFamily: "'Noto Serif', serif" }}
+                  >
                     सामान की फोटो लें
                   </span>
-                  <span className="text-xs text-center px-4" style={{ color: "#9C6644" }}>
+                  <p className="text-xs text-[#9C6644] mt-1">
                     कैमरा या गैलरी खोलने के लिए यहाँ दबाएं
-                  </span>
-                </>
+                  </p>
+                </div>
               )}
             </button>
           </div>
 
           {/* Voice Input */}
           <div>
-            <p className="text-sm font-bold mb-3" style={{ color: "#3D1F0F", fontFamily: "'Noto Serif', serif" }}>
+            <p
+              className="text-sm font-bold mb-3 text-[#3D1F0F]"
+              style={{ fontFamily: "'Noto Serif', serif" }}
+            >
               🎙 बोलकर जानकारी दें
             </p>
             <div className="flex gap-3 items-end">
               <div
-                className="flex-1 relative rounded-2xl overflow-hidden"
+                className="flex-1 relative rounded-2xl p-1"
                 style={{
                   background: "#FFF8F3",
                   border: isRecording ? "2px solid #6B3A2A" : "1.5px solid #E8C9B0",
-                  minHeight: 110,
+                  minHeight: 105,
                 }}
               >
                 <textarea
-                  className="w-full h-full resize-none p-4 text-sm outline-none bg-transparent"
-                  style={{
-                    color: "#3D1F0F",
-                    minHeight: 110,
-                    fontFamily: "'Poppins', sans-serif",
-                    lineHeight: 1.6,
-                  }}
-                  placeholder={isRecording ? "सुन रहे हैं…" : "माइक बटन दबाकर बोलें: 'यह हाथ से बनी मधुबनी पेंटिंग है...'"}
+                  className="w-full h-full resize-none p-3 text-sm outline-none bg-transparent"
+                  style={{ color: "#3D1F0F" }}
+                  placeholder={isRecording ? "सुन रहे हैं…" : "माइक दबाकर बोलें — 'यह मधुबनी पेंटिंग है...'"}
                   value={voiceText}
                   onChange={(e) => setVoiceText(e.target.value)}
                 />
@@ -487,30 +850,24 @@ Output ONLY valid JSON matching this schema:
               <button
                 type="button"
                 onClick={handleMicToggle}
-                className="flex-shrink-0 rounded-full flex items-center justify-center transition-all active:scale-95"
+                className="w-14 h-14 rounded-full flex items-center justify-center text-white text-xl shadow-md transition active:scale-95"
                 style={{
-                  width: 64,
-                  height: 64,
                   background: isRecording
-                    ? "linear-gradient(135deg, #C4886B 0%, #9C6644 100%)"
+                    ? "#DC2626"
                     : "linear-gradient(135deg, #8B4513 0%, #6B3A2A 100%)",
-                  boxShadow: "0 8px 24px rgba(107,58,42,0.35)",
-                  transform: isRecording ? "scale(1.08)" : "scale(1)",
                 }}
               >
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                  <rect x="9" y="2" width="6" height="11" rx="3" fill="white" />
-                  <path d="M5 11a7 7 0 0014 0" stroke="white" strokeWidth="2" strokeLinecap="round" />
-                  <line x1="12" y1="18" x2="12" y2="22" stroke="white" strokeWidth="2" strokeLinecap="round" />
-                  <line x1="9" y1="22" x2="15" y2="22" stroke="white" strokeWidth="2" strokeLinecap="round" />
-                </svg>
+                {isRecording ? "⏹" : "🎤"}
               </button>
             </div>
           </div>
 
-          {/* Categories */}
+          {/* Category Chips with चित्रकारी (Painting) */}
           <div>
-            <p className="text-sm font-bold mb-3" style={{ color: "#3D1F0F", fontFamily: "'Noto Serif', serif" }}>
+            <p
+              className="text-sm font-bold mb-3 text-[#3D1F0F]"
+              style={{ fontFamily: "'Noto Serif', serif" }}
+            >
               सामान किस तरह का है?
             </p>
             <div className="flex flex-wrap gap-2">
@@ -519,34 +876,21 @@ Output ONLY valid JSON matching this schema:
                   key={en}
                   type="button"
                   onClick={() => setSelectedCategory(i)}
-                  className="px-4 py-2 rounded-full text-sm font-semibold transition-all flex flex-col items-center leading-tight"
+                  className="px-4 py-2 rounded-full text-sm font-semibold transition-all"
                   style={{
-                    background: selectedCategory === i ? "#6B3A2A" : "rgba(196,136,107,0.10)",
+                    background: selectedCategory === i ? "#6B3A2A" : "rgba(196,136,107,0.1)",
                     color: selectedCategory === i ? "white" : "#6B3A2A",
-                    border: selectedCategory === i ? "1.5px solid #6B3A2A" : "1.5px solid rgba(196,136,107,0.35)",
-                    fontFamily: "'Noto Serif', serif",
+                    border: "1.5px solid " + (selectedCategory === i ? "#6B3A2A" : "rgba(196,136,107,0.3)"),
                   }}
                 >
-                  <span>{hi}</span>
-                  <span
-                    className="text-xs font-normal mt-0.5"
-                    style={{
-                      opacity: 0.65,
-                      fontFamily: "'Poppins', sans-serif",
-                      color: selectedCategory === i ? "rgba(255,255,255,0.85)" : "#9C6644",
-                    }}
-                  >
-                    {en}
-                  </span>
+                  {hi} ({en})
                 </button>
               ))}
             </div>
           </div>
-
-          <div style={{ height: 24 }} />
         </div>
 
-        {/* ── Generate Button (Simple & Clear for Artisans) ── */}
+        {/* Action Button */}
         <div
           className="flex-shrink-0 px-5 pb-8 pt-4"
           style={{ background: "linear-gradient(to top, #FFFBF7 85%, transparent)" }}
@@ -562,27 +906,17 @@ Output ONLY valid JSON matching this schema:
             }}
           >
             {isLoading ? (
-              <span className="animate-pulse flex items-center gap-2">
-                <span className="inline-block animate-spin">⏳</span>
-                <span>{loadingStage || "जानकारी तैयार हो रही है..."}</span>
-              </span>
+              <span className="animate-pulse">{loadingStage || "तैयार हो रहा है..."}</span>
             ) : (
               <>
-                {/* Single clean Sparkle icon */}
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"
-                    fill="white"
-                  />
-                </svg>
-                <span className="text-base tracking-wide">
+                <span>✦</span>
+                <span style={{ fontFamily: "'Noto Serif', serif" }}>
                   दुकान में सामान जोड़ें
                 </span>
               </>
             )}
           </button>
-
-          <p className="text-center text-xs mt-2.5 text-[#8B4513] font-medium">
+          <p className="text-center text-xs mt-2 text-[#8B4513] font-medium">
             ✨ AI फोटो देखकर सही दाम और विवरण खुद लिख देगा
           </p>
         </div>

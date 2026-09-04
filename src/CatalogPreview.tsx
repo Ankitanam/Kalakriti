@@ -1,3 +1,4 @@
+// src/CatalogPreview.tsx
 import { useState } from "react";
 
 export interface CatalogData {
@@ -11,6 +12,7 @@ export interface CatalogData {
     specs_hi?: Array<{ label: string; value: string }>;
     specs_en?: Array<{ label: string; value: string }>;
     suggested_price?: number;
+    quantity?: number;
     artisan_name?: string;
     artisan_region?: string;
     tags?: string[];
@@ -20,42 +22,34 @@ interface CatalogPreviewProps {
     data?: CatalogData | null;
     onBack?: () => void;
     onCheckout?: () => void;
-    photoUrl?: string | null;
-    voiceText?: string;
 }
 
-export default function CatalogPreview({
-    data,
-    onBack,
-    onCheckout,
-    photoUrl,
-    voiceText,
-}: CatalogPreviewProps) {
+export default function CatalogPreview({ data, onBack, onCheckout }: CatalogPreviewProps) {
     const [activeTab, setActiveTab] = useState<"hindi" | "english">("hindi");
     const [published, setPublished] = useState(false);
 
-    // ── Smart Dynamic Fallbacks ──
-    const titleHi = data?.title_hi || "मधुबनी सूर्य लोककला पेंटिंग";
-    const titleEn = data?.title_en || "Handmade Madhubani Sun Art (Unframed)";
-    const price = data?.suggested_price || 299;
+    const titleHi = data?.title_hi || "हस्तनिर्मित पारंपरिक उत्पाद";
+    const titleEn = data?.title_en || "Handcrafted Traditional Product";
+    const price = data?.suggested_price || 199;
     const originalPrice = Math.round(price * 1.6);
     const artisanName = data?.artisan_name || "माधुरी देवी";
-    const artisanRegion = data?.artisan_region || "मिथिला, बिहार Artisan";
-    const imageUrl =
-        data?.imageUrl ||
-        photoUrl ||
-        "https://images.unsplash.com/photo-1604264726154-26480e76f4e1?w=500";
+    const artisanRegion = data?.artisan_region || "कारीगर क्लस्टर, भारत";
+    const imageUrl = data?.imageUrl || "https://images.unsplash.com/photo-1604264726154-26480e76f4e1?w=500";
 
-    const tags =
-        data?.tags && data.tags.length > 0
-            ? data.tags
-            : ["मधुबनी", "हस्तशिल्प", "ONDC Direct", "Affordable", "Handmade"];
+    const tags = data?.tags && data.tags.length > 0
+        ? data.tags
+        : ["हस्तशिल्प", "Handmade", "ONDC Direct", "Kalakriti"];
+
+    // Dynamic Summary & Description based on AI output
+    const summaryHi = data?.quick_summary_hi || data?.description_hi || "कुशल कारीगरों द्वारा पारंपरिक कला से तैयार किया गया प्रामाणिक उत्पाद।";
+    const summaryEn = data?.quick_summary_en || data?.description_en || "Authentic handcrafted piece made with care using heritage methods.";
 
     return (
         <div
             className="size-full flex items-center justify-center"
-            style={{ background: "#F5EFE7", fontFamily: "'Poppins', sans-serif" }}
+            style={{ background: "#EDE0D4", fontFamily: "'Poppins', sans-serif" }}
         >
+            {/* Phone shell */}
             <div
                 className="relative flex flex-col overflow-hidden"
                 style={{
@@ -63,8 +57,7 @@ export default function CatalogPreview({
                     height: "min(844px, 100vh)",
                     background: "#FFFBF7",
                     borderRadius: "clamp(0px, 2vw, 28px)",
-                    boxShadow:
-                        "0 24px 80px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.08)",
+                    boxShadow: "0 24px 80px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.08)",
                 }}
             >
                 {/* Status bar */}
@@ -88,18 +81,12 @@ export default function CatalogPreview({
                 >
                     <button
                         type="button"
-                        className="w-10 h-10 rounded-full flex items-center justify-center transition active:scale-95"
+                        className="w-10 h-10 rounded-full flex items-center justify-center transition active:scale-95 text-white"
                         style={{ background: "rgba(255,255,255,0.12)" }}
                         onClick={onBack}
                     >
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                            <path
-                                d="M15 18l-6-6 6-6"
-                                stroke="white"
-                                strokeWidth="2.2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                            />
+                            <path d="M15 18l-6-6 6-6" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
                     </button>
                     <div className="flex-1">
@@ -109,34 +96,19 @@ export default function CatalogPreview({
                         >
                             Preview Listing
                         </h1>
-                        <p className="text-xs text-white/60 -mt-0.5">AI-generated catalog</p>
+                        <p className="text-xs text-white/60 -mt-0.5">Kalakriti AI Catalog</p>
                     </div>
-                    <button
-                        type="button"
-                        className="w-10 h-10 rounded-full flex items-center justify-center"
-                        style={{ background: "rgba(255,255,255,0.12)" }}
-                    >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                            <circle cx="12" cy="8" r="3" stroke="white" strokeWidth="2" />
-                            <path
-                                d="M4 20c0-4 3.6-7 8-7s8 3 8 7"
-                                stroke="white"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                            />
-                        </svg>
-                    </button>
                 </div>
 
                 {/* Scrollable content */}
                 <div
                     className="flex-1 overflow-y-auto"
-                    style={{ scrollbarWidth: "none", paddingBottom: 100 }}
+                    style={{ scrollbarWidth: "none", paddingBottom: 110 }}
                 >
                     {/* Product Image */}
                     <div
-                        className="mx-5 mt-5 rounded-3xl overflow-hidden relative shadow-sm"
-                        style={{ height: 250, background: "#F0EBE3" }}
+                        className="mx-4 mt-4 rounded-3xl overflow-hidden relative shadow-sm"
+                        style={{ height: 260, background: "#F0EBE3" }}
                     >
                         <img
                             src={imageUrl}
@@ -145,44 +117,31 @@ export default function CatalogPreview({
                         />
                         <div
                             className="absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
-                            style={{
-                                background: "rgba(255,255,255,0.92)",
-                                color: "#6B3A2A",
-                                backdropFilter: "blur(8px)",
-                            }}
+                            style={{ background: "rgba(255,255,255,0.92)", color: "#6B3A2A" }}
                         >
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="#C4886B">
-                                <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" />
-                            </svg>
-                            AI Enhanced
+                            ★ AI Enhanced
                         </div>
                     </div>
 
                     {/* Product Details Card */}
-                    <div className="mx-5 mt-4 space-y-3">
+                    <div className="mx-4 mt-4 space-y-3">
+                        {/* ONDC Badges */}
                         <div className="flex items-center gap-2">
                             <span
                                 className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold tracking-wide"
-                                style={{
-                                    background: "rgba(124,58,237,0.1)",
-                                    color: "#7C3AED",
-                                    border: "1.5px solid rgba(124,58,237,0.25)",
-                                }}
+                                style={{ background: "rgba(124,58,237,0.1)", color: "#7C3AED", border: "1.5px solid rgba(124,58,237,0.25)" }}
                             >
                                 ✨ ONDC Ready
                             </span>
                             <span
                                 className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold"
-                                style={{
-                                    background: "rgba(22,163,74,0.1)",
-                                    color: "#16A34A",
-                                    border: "1.5px solid rgba(22,163,74,0.25)",
-                                }}
+                                style={{ background: "rgba(22,163,74,0.1)", color: "#16A34A", border: "1.5px solid rgba(22,163,74,0.25)" }}
                             >
                                 ● Live Preview
                             </span>
                         </div>
 
+                        {/* Title block */}
                         <div>
                             <h2
                                 className="text-2xl font-bold leading-tight"
@@ -190,14 +149,12 @@ export default function CatalogPreview({
                             >
                                 {titleHi}
                             </h2>
-                            <p
-                                className="text-sm font-medium mt-0.5"
-                                style={{ color: "#9C6644" }}
-                            >
+                            <p className="text-sm font-medium mt-0.5" style={{ color: "#9C6644" }}>
                                 {titleEn}
                             </p>
                         </div>
 
+                        {/* Seller info */}
                         <div className="flex items-center gap-2">
                             <div
                                 className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white"
@@ -205,111 +162,58 @@ export default function CatalogPreview({
                             >
                                 {artisanName.charAt(0)}
                             </div>
-                            <span className="text-xs" style={{ color: "#9C6644" }}>
+                            <span className="text-xs font-medium" style={{ color: "#9C6644" }}>
                                 {artisanName} · {artisanRegion}
                             </span>
                             <div className="flex items-center gap-0.5 ml-auto">
-                                {[1, 2, 3, 4, 5].map((s) => (
-                                    <svg
-                                        key={s}
-                                        width="12"
-                                        height="12"
-                                        viewBox="0 0 24 24"
-                                        fill={s <= 4 ? "#F59E0B" : "#E5E7EB"}
-                                    >
-                                        <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" />
-                                    </svg>
-                                ))}
-                                <span className="text-xs ml-1" style={{ color: "#9C6644" }}>
-                                    4.0
-                                </span>
+                                <span className="text-amber-500 text-xs">★★★★☆</span>
+                                <span className="text-xs ml-1 text-[#9C6644]">4.0</span>
                             </div>
                         </div>
 
-                        <div
-                            style={{ height: 1, background: "rgba(196,136,107,0.2)" }}
-                        />
+                        <div style={{ height: 1, background: "rgba(196,136,107,0.2)" }} />
 
                         {/* Pricing */}
                         <div
                             className="rounded-2xl p-4 flex items-center justify-between"
-                            style={{
-                                background:
-                                    "linear-gradient(135deg, #FFF8F3 0%, #FEF0E4 100%)",
-                                border: "1.5px solid rgba(196,136,107,0.2)",
-                            }}
+                            style={{ background: "linear-gradient(135deg, #FFF8F3 0%, #FEF0E4 100%)", border: "1.5px solid rgba(196,136,107,0.2)" }}
                         >
                             <div>
                                 <div className="flex items-baseline gap-2">
                                     <span
                                         className="text-3xl font-bold"
-                                        style={{
-                                            color: "#3D1F0F",
-                                            fontFamily: "'Noto Serif', serif",
-                                        }}
+                                        style={{ color: "#3D1F0F", fontFamily: "'Noto Serif', serif" }}
                                     >
                                         ₹{price}
                                     </span>
                                     <span
-                                        className="text-base font-medium line-through"
-                                        style={{ color: "#B07050" }}
+                                        className="text-base font-medium line-through text-stone-400"
                                     >
                                         ₹{originalPrice}
                                     </span>
                                 </div>
-                                <p className="text-xs mt-0.5" style={{ color: "#9C6644" }}>
+                                <p className="text-xs mt-0.5 text-stone-500">
                                     Incl. of all taxes · Free delivery
                                 </p>
                             </div>
                             <div
-                                className="flex flex-col items-center justify-center rounded-2xl px-4 py-2.5 text-center"
-                                style={{
-                                    background: "rgba(22,163,74,0.1)",
-                                    border: "1.5px solid rgba(22,163,74,0.25)",
-                                }}
+                                className="flex flex-col items-center justify-center rounded-2xl px-4 py-2 text-center bg-emerald-50 border border-emerald-200"
                             >
-                                <span
-                                    className="text-lg font-bold"
-                                    style={{ color: "#16A34A" }}
-                                >
-                                    40%
-                                </span>
-                                <span
-                                    className="text-xs font-medium leading-tight"
-                                    style={{ color: "#16A34A" }}
-                                >
-                                    Profit for
-                                    <br />
-                                    Artisan
-                                </span>
+                                <span className="text-base font-bold text-emerald-700">40% बचत</span>
+                                <span className="text-[10px] font-medium text-emerald-800">कारीगर को सीधा लाभ</span>
                             </div>
                         </div>
 
-                        <div
-                            style={{ height: 1, background: "rgba(196,136,107,0.2)" }}
-                        />
-
-                        {/* Tabs */}
+                        {/* ── Dynamic Tabs & Specifications (NO Hardcoded Pot text!) ── */}
                         <div>
-                            <div
-                                className="flex rounded-xl overflow-hidden mb-3"
-                                style={{
-                                    background: "rgba(196,136,107,0.1)",
-                                    padding: 3,
-                                }}
-                            >
+                            <div className="flex rounded-xl overflow-hidden mb-3" style={{ background: "rgba(196,136,107,0.1)", padding: 3 }}>
                                 <button
                                     type="button"
                                     onClick={() => setActiveTab("hindi")}
                                     className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all duration-200"
                                     style={{
-                                        background:
-                                            activeTab === "hindi" ? "#6B3A2A" : "transparent",
+                                        background: activeTab === "hindi" ? "#6B3A2A" : "transparent",
                                         color: activeTab === "hindi" ? "white" : "#9C6644",
-                                        boxShadow:
-                                            activeTab === "hindi"
-                                                ? "0 2px 8px rgba(107,58,42,0.25)"
-                                                : "none",
                                     }}
                                 >
                                     हिंदी विवरण
@@ -319,152 +223,52 @@ export default function CatalogPreview({
                                     onClick={() => setActiveTab("english")}
                                     className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all duration-200"
                                     style={{
-                                        background:
-                                            activeTab === "english" ? "#6B3A2A" : "transparent",
+                                        background: activeTab === "english" ? "#6B3A2A" : "transparent",
                                         color: activeTab === "english" ? "white" : "#9C6644",
-                                        boxShadow:
-                                            activeTab === "english"
-                                                ? "0 2px 8px rgba(107,58,42,0.25)"
-                                                : "none",
                                     }}
                                 >
                                     English Copy
                                 </button>
                             </div>
 
-                            <p className="text-xs font-medium text-[#5A2E12] mb-3 px-1 leading-relaxed">
-                                {activeTab === "hindi"
-                                    ? data?.quick_summary_hi ||
-                                    data?.description_hi ||
-                                    "हस्तनिर्मित प्रामाणिक भारतीय लोककला।"
-                                    : data?.quick_summary_en ||
-                                    data?.description_en ||
-                                    "Authentic handmade Indian craft by rural creators."}
-                            </p>
+                            {/* Dynamic AI Summary paragraph */}
+                            <div className="p-3.5 rounded-2xl mb-3 bg-[#FFFBF7] border border-[#F3E2D5]">
+                                <p className="text-xs text-[#5A2E12] leading-relaxed font-medium">
+                                    {activeTab === "hindi" ? summaryHi : summaryEn}
+                                </p>
+                            </div>
 
-                            <div
-                                className="rounded-2xl overflow-hidden shadow-xs"
-                                style={{
-                                    border: "1.5px solid rgba(196,136,107,0.25)",
-                                    background: "#FFFBF7",
-                                }}
+                            {/* ── Tabular Specifications ── */}
+                            <div 
+                                className="rounded-2xl overflow-hidden shadow-xs border" 
+                                style={{ borderColor: "rgba(196,136,107,0.25)", background: "#FFFBF7" }}
                             >
-                                {activeTab === "hindi" ? (
-                                    <>
-                                        <p
-                                            style={{
-                                                fontFamily: "'Noto Serif', serif",
-                                                lineHeight: 1.8,
-                                            }}
-                                        >
-                                            {voiceText
-                                                ? `🎙️ आपने कहा: "${voiceText}"`
-                                                : "यह मिट्टी का घड़ा राजस्थान के कुशल कुम्हार कारीगरों द्वारा हाथ से बनाया गया है। परंपरागत तकनीक और प्राकृतिक मिट्टी का उपयोग करके इसे तैयार किया गया है।"}
-                                        </p>
-                                        <ul className="mt-3 space-y-1.5">
-                                            {[
-                                                "सामग्री: प्राकृतिक मिट्टी",
-                                                "ऊँचाई: 25 सेमी",
-                                                "वजन: 600 ग्राम",
-                                                "देखभाल: सूखे कपड़े से साफ करें",
-                                            ].map((item) => (
-                                                <li key={item} className="flex items-start gap-2">
-                                                    <span style={{ color: "#C4886B" }}>•</span>
-                                                    <span style={{ fontFamily: "'Noto Serif', serif" }}>
-                                                        {item}
-                                                    </span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </>
-                                ) : (
-                                    <>
-                                        <p style={{ lineHeight: 1.8 }}>
-                                            A beautifully hand-thrown decorative clay pot crafted by
-                                            master potters from Rajasthan. Made using traditional
-                                            wheel-throwing techniques with locally sourced terracotta
-                                            clay.
-                                        </p>
-                                        <ul className="mt-3 space-y-1.5">
-                                            {[
-                                                "Material: Natural terracotta clay",
-                                                "Height: 25 cm",
-                                                "Weight: 600g",
-                                                "Care: Wipe with dry cloth",
-                                            ].map((item) => (
-                                                <li key={item} className="flex items-start gap-2">
-                                                    <span style={{ color: "#C4886B" }}>•</span>
-                                                    <span>{item}</span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </>
-                                )}
-
-                                <div
-                                    className="px-3.5 py-2.5 border-b flex items-center justify-between"
-                                    style={{
-                                        background: "rgba(107,58,42,0.06)",
-                                        borderColor: "rgba(196,136,107,0.2)",
-                                    }}
-                                >
+                                <div className="px-3.5 py-2.5 border-b flex items-center justify-between bg-[#F8EDE5]" style={{ borderColor: "rgba(196,136,107,0.2)" }}>
                                     <span className="text-[11px] font-bold uppercase tracking-wider text-[#6B3A2A]">
-                                        {activeTab === "hindi"
-                                            ? "📋 उत्पाद विवरण (Specs)"
-                                            : "📋 Product Details"}
+                                        {activeTab === "hindi" ? "📋 उत्पाद विवरण (SPECS)" : "📋 Product Details"}
                                     </span>
-                                    <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                                    <span className="text-[10px] text-emerald-800 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-300">
                                         ONDC सत्यापित
                                     </span>
                                 </div>
 
-                                <div
-                                    className="divide-y text-xs"
-                                    style={{ borderColor: "rgba(196,136,107,0.15)" }}
-                                >
-                                    {(activeTab === "hindi"
-                                        ? data?.specs_hi || [
-                                            { label: "कला शैली", value: "मधुबनी / मिथिला लोककला" },
-                                            {
-                                                label: "सामग्री",
-                                                value: "हस्तनिर्मित कागज़ + प्राकृतिक रंग",
-                                            },
-                                            { label: "आकार", value: "A4 शीट (~8x11 इंच)" },
-                                            {
-                                                label: "फ्रेम",
-                                                value: "बिना फ्रेम (सुरक्षित रोल पैकिंग)",
-                                            },
-                                            {
-                                                label: "उपयोग",
-                                                value: "दीवार सज्जा, लिविंग रूम, उपहार",
-                                            },
-                                        ]
-                                        : data?.specs_en || [
-                                            {
-                                                label: "Art Form",
-                                                value: "Mithila / Madhubani Folk Art",
-                                            },
-                                            {
-                                                label: "Material",
-                                                value: "Handmade Paper & Eco Dyes",
-                                            },
-                                            { label: "Size", value: "A4 Sheet (~8x11 inches)" },
-                                            {
-                                                label: "Framing",
-                                                value: "Unframed (Safe Roll Packing)",
-                                            },
-                                            {
-                                                label: "Best For",
-                                                value: "Wall Decor, Study, Cultural Gift",
-                                            },
-                                        ]
+                                <div className="divide-y text-xs" style={{ borderColor: "rgba(196,136,107,0.15)" }}>
+                                    {(activeTab === "hindi" 
+                                        ? (data?.specs_hi || [
+                                            { label: "कला / शिल्प", value: titleHi },
+                                            { label: "सामग्री", value: "प्राकृतिक हस्तशिल्प सामग्री" },
+                                            { label: "उपयोग", value: "सजावट एवं उपहार" }
+                                        ])
+                                        : (data?.specs_en || [
+                                            { label: "Craft Form", value: titleEn },
+                                            { label: "Material", value: "Natural Artisanal Material" },
+                                            { label: "Best For", value: "Home Decor & Gifting" }
+                                        ])
                                     ).map((spec: { label: string; value: string }, idx: number) => (
-                                        <div
-                                            key={idx}
-                                            className="grid grid-cols-12 px-3.5 py-2.5 items-center transition hover:bg-[#FFF4EC]"
-                                            style={{
-                                                background: idx % 2 === 0 ? "#FFFFFF" : "#FFFBF7",
-                                            }}
+                                        <div 
+                                            key={idx} 
+                                            className="grid grid-cols-12 px-3.5 py-2.5 items-center"
+                                            style={{ background: idx % 2 === 0 ? "#FFFFFF" : "#FFFBF7" }}
                                         >
                                             <span className="col-span-4 font-semibold text-[#8B4513] text-[11px]">
                                                 {spec.label}
@@ -478,26 +282,18 @@ export default function CatalogPreview({
                             </div>
                         </div>
 
-                        {/* AI Tags */}
+                        {/* AI-Generated Tags */}
                         <div>
-                            <p
-                                className="text-xs font-semibold uppercase tracking-widest mb-2 mt-4"
-                                style={{ color: "#9C6644" }}
-                            >
+                            <p className="text-xs font-semibold uppercase tracking-widest mb-2 mt-4 text-[#9C6644]">
                                 AI-Generated Tags
                             </p>
                             <div className="flex flex-wrap gap-2">
                                 {tags.map((tag: string) => (
                                     <span
                                         key={tag}
-                                        className="px-3 py-1 rounded-full text-xs font-medium"
-                                        style={{
-                                            background: "rgba(196,136,107,0.12)",
-                                            color: "#6B3A2A",
-                                            border: "1px solid rgba(196,136,107,0.3)",
-                                        }}
+                                        className="px-3 py-1 rounded-full text-xs font-medium bg-[#F5EDE6] text-[#6B3A2A] border border-[#E0CCBE]"
                                     >
-                                        {tag}
+                                        #{tag}
                                     </span>
                                 ))}
                             </div>
@@ -507,45 +303,23 @@ export default function CatalogPreview({
 
                 {/* Sticky Bottom Bar */}
                 <div
-                    className="absolute bottom-0 left-0 right-0 flex-shrink-0 px-5 pt-3 pb-8"
+                    className="absolute bottom-0 left-0 right-0 flex-shrink-0 px-4 pt-3 pb-7"
                     style={{
-                        background: "linear-gradient(to top, #FFFBF7 70%, transparent)",
-                        backdropFilter: "blur(2px)",
+                        background: "linear-gradient(to top, #FFFBF7 75%, transparent)",
                     }}
                 >
                     {published ? (
                         <div
-                            className="w-full flex items-center justify-center gap-2 rounded-2xl py-4 text-base font-semibold"
-                            style={{
-                                background: "rgba(22,163,74,0.12)",
-                                color: "#16A34A",
-                                border: "1.5px solid rgba(22,163,74,0.3)",
-                            }}
+                            className="w-full flex items-center justify-center gap-2 rounded-2xl py-4 text-base font-bold bg-emerald-100 text-emerald-800 border border-emerald-300"
                         >
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                                <path
-                                    d="M20 6L9 17l-5-5"
-                                    stroke="#16A34A"
-                                    strokeWidth="2.5"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                />
-                            </svg>
-                            Published to ONDC!
+                            ✓ ONDC नेटवर्क पर प्रकाशित!
                         </div>
                     ) : (
                         <div className="flex gap-3">
                             <button
                                 type="button"
                                 onClick={onBack}
-                                className="flex items-center justify-center gap-2 rounded-2xl py-4 font-semibold text-sm transition-all duration-200 active:scale-95"
-                                style={{
-                                    flex: "0 0 auto",
-                                    width: 110,
-                                    background: "transparent",
-                                    color: "#6B3A2A",
-                                    border: "2px solid #6B3A2A",
-                                }}
+                                className="w-28 py-3.5 rounded-2xl font-bold text-sm border-2 border-[#6B3A2A] text-[#6B3A2A] active:scale-95 transition"
                             >
                                 Edit
                             </button>
@@ -555,15 +329,12 @@ export default function CatalogPreview({
                                     setPublished(true);
                                     setTimeout(() => onCheckout?.(), 600);
                                 }}
-                                className="flex-1 flex items-center justify-center gap-2 rounded-2xl py-4 font-semibold text-sm transition-all duration-200 active:scale-[0.97]"
+                                className="flex-1 flex items-center justify-center gap-2 rounded-2xl py-3.5 font-bold text-sm text-white shadow-lg active:scale-[0.98] transition"
                                 style={{
-                                    background:
-                                        "linear-gradient(135deg, #8B4513 0%, #6B3A2A 100%)",
-                                    color: "white",
-                                    boxShadow: "0 8px 28px rgba(107,58,42,0.38)",
+                                    background: "linear-gradient(135deg, #8B4513 0%, #6B3A2A 100%)",
                                 }}
                             >
-                                Approve &amp; Publish
+                                🚀 Approve &amp; Publish
                             </button>
                         </div>
                     )}
