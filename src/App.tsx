@@ -1,4 +1,5 @@
 // src/App.tsx
+import ArtisanDashboard from "./ArtisanDashboard";
 import { useState, useRef } from "react";
 import CatalogPreview, { CatalogData } from "./CatalogPreview";
 import OnboardingScreen from "./OnboardingScreen";
@@ -139,7 +140,7 @@ export default function App() {
   const saveProductToInventory = (catalogItem: CatalogData) => {
     // Check if an item with the same title already exists
     const existingIndex = inventory.findIndex(
-      (item) => item.title_hi.trim() === catalogItem.title_hi?.trim()
+      (item) => item.title_hi?.trim() === catalogItem.title_hi?.trim()
     );
 
     let updatedList: StoreItem[];
@@ -449,241 +450,21 @@ Output ONLY valid JSON matching this schema:
     );
   }
 
-  // ── DASHBOARD (मेरी दुकान) WITH QUANTITY MANAGEMENT ──
+  // ── SCREEN: "मेरी दुकान" DASHBOARD ──
   if (screen === "dashboard") {
-    const totalUnits = inventory.reduce((sum, item) => sum + (item.quantity || 1), 0);
-
     return (
-      <div
-        className="size-full flex items-center justify-center"
-        style={{ background: "#EDE0D4", fontFamily: "'Poppins', sans-serif" }}
-      >
-        <div
-          className="relative flex flex-col overflow-hidden"
-          style={{
-            width: "min(390px, 100vw)",
-            height: "min(844px, 100vh)",
-            background: "#FFFBF7",
-            borderRadius: "clamp(0px, 2vw, 28px)",
-            boxShadow: "0 24px 80px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.08)",
-          }}
-        >
-          {/* Status Bar */}
-          <div
-            className="flex items-center justify-between px-6 pt-3 pb-1 flex-shrink-0"
-            style={{ background: "#6B3A2A" }}
-          >
-            <span className="text-xs font-medium text-white/90">9:41</span>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-white/80">5G</span>
-              <div className="w-5 h-2.5 border border-white/60 rounded-sm p-0.5">
-                <div className="h-full bg-white w-4/5 rounded-xs" />
-              </div>
-            </div>
-          </div>
-
-          {/* Top Bar (Kalakriti Rebranded) */}
-          <div
-            className="flex items-center px-4 py-3 gap-3 flex-shrink-0"
-            style={{ background: "#6B3A2A" }}
-          >
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="w-10 h-10 rounded-2xl flex items-center justify-center text-white active:scale-95 transition"
-              style={{ background: "rgba(255,255,255,0.15)" }}
-              title="लॉगआउट"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path d="M15 18l-6-6 6-6" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-
-            <div className="flex-1">
-              <h1
-                className="text-xl font-bold text-white tracking-wide"
-                style={{ fontFamily: "'Noto Serif', serif" }}
-              >
-                मेरी दुकान
-              </h1>
-              <p className="text-xs text-white/70 -mt-0.5">
-                Kalakriti • ONDC प्रमाणित स्टोर
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="px-2.5 py-1 rounded-full text-[10px] font-bold text-white bg-red-900/70 border border-red-300/30 active:scale-95"
-            >
-              लॉगआउट
-            </button>
-          </div>
-
-          {/* Body */}
-          <div
-            className="flex-1 overflow-y-auto px-4 py-4 space-y-4"
-            style={{ scrollbarWidth: "none", paddingBottom: 110 }}
-          >
-            {/* Stats Banner */}
-            <div
-              className="rounded-2xl p-4 flex items-center justify-between"
-              style={{
-                background: "linear-gradient(135deg, #FFF0E6 0%, #FDE7D8 100%)",
-                border: "1.5px solid rgba(196,136,107,0.3)",
-              }}
-            >
-              <div>
-                <p className="text-xs font-semibold text-[#8B4513] uppercase tracking-wider">
-                  कुल सामान व स्टॉक
-                </p>
-                <h2
-                  className="text-2xl font-extrabold text-[#3D1F0F] mt-0.5"
-                  style={{ fontFamily: "'Noto Serif', serif" }}
-                >
-                  {inventory.length} प्रकार ({totalUnits} पीस)
-                </h2>
-                <p className="text-[11px] text-[#9C6644] mt-0.5">
-                  ONDC पर पूरे भारत में लाइव
-                </p>
-              </div>
-              <div className="w-12 h-12 rounded-2xl bg-[#6B3A2A] text-white flex items-center justify-center text-xl shadow-md">
-                🛍️
-              </div>
-            </div>
-
-            {/* Inventory List Header */}
-            <div className="flex items-center justify-between pt-1">
-              <h3
-                className="text-base font-bold text-[#3D1F0F]"
-                style={{ fontFamily: "'Noto Serif', serif" }}
-              >
-                दुकान का सामान (Inventory)
-              </h3>
-              <span className="text-xs text-[#9C6644]">मात्रा बदलें या हटाएं</span>
-            </div>
-
-            {/* ── 2-Column Product Grid with Stock / Quantity Control ── */}
-            {inventory.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <div className="text-4xl mb-2">📦</div>
-                <h4 className="font-bold text-[#3D1F0F]">दुकान में कोई सामान नहीं है</h4>
-                <p className="text-xs text-[#9C6644] mt-1">नीचे दिए गए बटन से नया सामान जोड़ें!</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-3">
-                {inventory.map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => {
-                      setSelectedPreviewItem(item);
-                      setScreen("preview");
-                    }}
-                    className="rounded-2xl overflow-hidden bg-white shadow-xs border flex flex-col cursor-pointer transition-all hover:shadow-md"
-                    style={{ borderColor: "rgba(196,136,107,0.25)" }}
-                  >
-                    {/* Thumbnail */}
-                    <div className="relative h-36 bg-[#F0EBE3] overflow-hidden">
-                      <img
-                        src={item.imageUrl}
-                        alt={item.title_en}
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute top-2 left-2 bg-white/95 px-2 py-0.5 rounded-md text-[9px] font-bold text-[#6B3A2A]">
-                        ONDC Active
-                      </div>
-                    </div>
-
-                    {/* Metadata & Controls */}
-                    <div className="p-3 flex-1 flex flex-col justify-between">
-                      <div>
-                        <h4
-                          className="font-bold text-xs text-[#3D1F0F] line-clamp-1 leading-tight"
-                          style={{ fontFamily: "'Noto Serif', serif" }}
-                        >
-                          {item.title_hi}
-                        </h4>
-                        <p className="text-[10px] text-[#8B4513] line-clamp-1 mt-0.5">
-                          {item.title_en}
-                        </p>
-                        <p className="text-sm font-extrabold text-[#3D1F0F] mt-1">
-                          ₹{item.suggested_price}
-                        </p>
-                      </div>
-
-                      {/* ── Quantity Controller (+ / -) ── */}
-                      <div className="mt-2.5 pt-2 border-t border-stone-100 flex items-center justify-between">
-                        <span className="text-[11px] font-semibold text-[#8B4513]">मात्रा:</span>
-                        <div className="flex items-center gap-1.5 bg-[#FFF0E5] px-1.5 py-0.5 rounded-lg border border-[#EAC9B0]">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDecreaseQty(item.id);
-                            }}
-                            className="w-5 h-5 rounded-md bg-white text-[#6B3A2A] font-bold text-xs flex items-center justify-center shadow-xs active:scale-90"
-                            title="मात्रा घटाएं"
-                          >
-                            −
-                          </button>
-                          <span className="font-bold text-xs text-[#3D1F0F] min-w-4 text-center">
-                            {item.quantity || 1}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleIncreaseQty(item.id);
-                            }}
-                            className="w-5 h-5 rounded-md bg-[#6B3A2A] text-white font-bold text-xs flex items-center justify-center shadow-xs active:scale-90"
-                            title="मात्रा बढ़ाएं"
-                          >
-                            ＋
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* ── Clear Hindi Visual Remove Button ── */}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRemoveProduct(item.id);
-                        }}
-                        className="w-full mt-2 py-1 rounded-lg text-[11px] font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 flex items-center justify-center gap-1 active:scale-95 transition"
-                      >
-                        <span>🗑️</span>
-                        <span>हटाएं (Remove)</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Sticky Bottom Bar */}
-          <div
-            className="absolute bottom-0 left-0 right-0 px-5 pb-7 pt-4 flex-shrink-0"
-            style={{ background: "linear-gradient(to top, #FFFBF7 85%, transparent)" }}
-          >
-            <button
-              type="button"
-              onClick={() => setScreen("capture")}
-              className="w-full flex items-center justify-center gap-2 rounded-2xl py-4 font-bold text-base text-white shadow-lg transition-all active:scale-[0.98]"
-              style={{
-                background: "linear-gradient(135deg, #8B4513 0%, #6B3A2A 100%)",
-                boxShadow: "0 8px 24px rgba(107,58,42,0.35)",
-              }}
-            >
-              <span className="text-xl leading-none">＋</span>
-              <span style={{ fontFamily: "'Noto Serif', serif" }}>
-                नया सामान जोड़ें (Add Product)
-              </span>
-            </button>
-          </div>
-        </div>
-      </div>
+      <ArtisanDashboard
+        inventory={inventory}
+        onAddNewProduct={() => setScreen("capture")}
+        onPreviewProduct={(product) => {
+          setSelectedPreviewItem(product);
+          setScreen("preview");
+        }}
+        onIncreaseQty={handleIncreaseQty}
+        onDecreaseQty={handleDecreaseQty}
+        onRemoveProduct={handleRemoveProduct}
+        onLogout={handleLogout}
+      />
     );
   }
 

@@ -1,3 +1,4 @@
+// src/OnboardingScreen.tsx
 import { useState } from "react";
 
 type Stage = "landing" | "otp";
@@ -42,10 +43,10 @@ export default function OnboardingScreen({ onLogin }: { onLogin?: () => void }) 
             >
                 {/* Status bar */}
                 <div
-                    className="flex items-center justify-between px-6 pt-3 pb-1 flex-shrink-0"
-                    style={{ background: "#FDF8F5" }}
+                    className="flex items-center justify-between px-6 pt-3 pb-1 flex-shrink-0 relative z-20"
+                    style={{ background: "transparent" }}
                 >
-                    <span className="text-xs font-semibold" style={{ color: "#6B3A2A", letterSpacing: "0.04em" }}>9:41</span>
+                    <span className="text-xs font-semibold text-[#6B3A2A]" style={{ letterSpacing: "0.04em" }}>9:41</span>
                     <div className="flex items-center gap-2.5">
                         <div className="flex items-end gap-px">
                             {[4, 6, 9, 12].map((h, i) => (
@@ -70,172 +71,108 @@ export default function OnboardingScreen({ onLogin }: { onLogin?: () => void }) 
                 {stage === "landing" && (
                     <div className="flex-1 flex flex-col overflow-y-auto" style={{ scrollbarWidth: "none" }}>
 
-                        {/* Illustration area */}
-                        <div className="relative flex-shrink-0" style={{ height: 280 }}>
-                            {/* Warm gradient sky */}
+                        {/* ── True-To-Life Hero Banner ── */}
+                        <div className="relative flex-shrink-0 overflow-hidden" style={{ height: 285 }}>
+                            {/* High-Resolution Authentic Indian Artisan Photo */}
+                            <img
+                                src="https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?w=800&auto=format&fit=crop&q=80"
+                                alt="Master Indian Artisan working on pottery wheel"
+                                className="w-full h-full object-cover"
+                            />
+                            
+                            {/* Warm Golden Hour & Earthen Gradient Overlay */}
                             <div
                                 className="absolute inset-0"
                                 style={{
-                                    background: "linear-gradient(175deg, #F5E6D3 0%, #EDD5BC 55%, #E8CAA8 100%)",
+                                    background: "linear-gradient(180deg, rgba(61,31,15,0.45) 0%, rgba(61,31,15,0.15) 40%, #FDF8F5 100%)",
                                 }}
                             />
 
-                            {/* Decorative arch behind artisan */}
-                            <div
-                                className="absolute"
-                                style={{
-                                    width: 200,
-                                    height: 200,
-                                    borderRadius: "50%",
-                                    background: "rgba(196,136,107,0.18)",
-                                    top: 40,
-                                    left: "50%",
-                                    transform: "translateX(-50%)",
-                                }}
-                            />
-                            <div
-                                className="absolute"
-                                style={{
-                                    width: 160,
-                                    height: 160,
-                                    borderRadius: "50%",
-                                    background: "rgba(196,136,107,0.14)",
-                                    top: 60,
-                                    left: "50%",
-                                    transform: "translateX(-50%)",
-                                }}
-                            />
-
-                            {/* Artisan illustration — SVG scene */}
-                            <svg
-                                className="absolute"
-                                style={{ bottom: 0, left: "50%", transform: "translateX(-50%)" }}
-                                width="260"
-                                height="220"
-                                viewBox="0 0 260 220"
-                                fill="none"
-                            >
-                                {/* Ground / mat */}
-                                <ellipse cx="130" cy="210" rx="110" ry="14" fill="rgba(107,58,42,0.12)" />
-                                <rect x="50" y="190" width="160" height="20" rx="4" fill="#C4886B" fillOpacity="0.25" />
-                                {/* Stripes on mat */}
-                                {[65, 85, 105, 125, 145, 165, 185].map((x) => (
-                                    <rect key={x} x={x} y="190" width="5" height="20" rx="2" fill="#9C6644" fillOpacity="0.2" />
-                                ))}
-
-                                {/* Pottery wheel base */}
-                                <ellipse cx="130" cy="190" rx="38" ry="9" fill="#8B4513" fillOpacity="0.45" />
-                                <ellipse cx="130" cy="185" rx="34" ry="7" fill="#9C6644" fillOpacity="0.55" />
-
-                                {/* Clay pot being shaped */}
-                                <ellipse cx="130" cy="160" rx="20" ry="8" fill="#C4886B" fillOpacity="0.6" />
-                                <path d="M110 160 Q108 140 116 128 Q122 118 130 116 Q138 118 144 128 Q152 140 150 160 Z" fill="#C4886B" />
-                                <ellipse cx="130" cy="116" rx="14" ry="5" fill="#B07050" />
-                                {/* Highlight on pot */}
-                                <ellipse cx="124" cy="138" rx="4" ry="10" fill="rgba(255,255,255,0.25)" transform="rotate(-10 124 138)" />
-
-                                {/* Artisan body */}
-                                {/* Legs (sitting cross-legged) */}
-                                <path d="M98 192 Q92 185 100 178 Q108 172 115 178 L122 190 Z" fill="#9C6644" />
-                                <path d="M162 192 Q168 185 160 178 Q152 172 145 178 L138 190 Z" fill="#9C6644" />
-                                {/* Torso */}
-                                <rect x="108" y="148" width="44" height="38" rx="12" fill="#8B4513" />
-                                {/* Dupatta / shawl accent */}
-                                <path d="M108 155 Q100 160 96 172 Q108 165 112 158 Z" fill="#C4886B" fillOpacity="0.8" />
-                                <path d="M152 155 Q160 160 164 172 Q152 165 148 158 Z" fill="#C4886B" fillOpacity="0.8" />
-
-                                {/* Arms reaching toward pot */}
-                                {/* Left arm */}
-                                <path d="M112 158 Q104 162 108 172 Q116 178 122 170 L118 162 Z" fill="#B07050" />
-                                {/* Right arm */}
-                                <path d="M148 158 Q156 162 152 172 Q144 178 138 170 L142 162 Z" fill="#B07050" />
-                                {/* Hands on pot */}
-                                <ellipse cx="113" cy="168" rx="7" ry="5" fill="#C4886B" transform="rotate(-20 113 168)" />
-                                <ellipse cx="147" cy="168" rx="7" ry="5" fill="#C4886B" transform="rotate(20 147 168)" />
-
-                                {/* Neck */}
-                                <rect x="125" y="140" width="10" height="12" rx="5" fill="#C4886B" />
-                                {/* Head */}
-                                <ellipse cx="130" cy="132" rx="19" ry="20" fill="#C4886B" />
-                                {/* Hair (bun) */}
-                                <ellipse cx="130" cy="113" rx="14" ry="8" fill="#3D1F0F" />
-                                <ellipse cx="130" cy="110" rx="8" ry="6" fill="#5A2E12" />
-                                <circle cx="130" cy="108" r="4" fill="#9C6644" fillOpacity="0.5" />
-                                {/* Bindi */}
-                                <circle cx="130" cy="126" r="2" fill="#C0392B" fillOpacity="0.9" />
-                                {/* Eyes */}
-                                <ellipse cx="124" cy="130" rx="2.5" ry="2.8" fill="#3D1F0F" />
-                                <ellipse cx="136" cy="130" rx="2.5" ry="2.8" fill="#3D1F0F" />
-                                <circle cx="125" cy="129" r="1" fill="white" />
-                                <circle cx="137" cy="129" r="1" fill="white" />
-                                {/* Earring */}
-                                <circle cx="111" cy="133" r="2" fill="#D97706" />
-                                <circle cx="149" cy="133" r="2" fill="#D97706" />
-                                {/* Smile */}
-                                <path d="M126 136 Q130 139 134 136" stroke="#5A2E12" strokeWidth="1.5" strokeLinecap="round" fill="none" />
-
-                                {/* Decorative pots in background */}
-                                <ellipse cx="72" cy="188" rx="12" ry="5" fill="#9C6644" fillOpacity="0.4" />
-                                <path d="M60 188 Q58 174 64 167 Q68 162 72 161 Q76 162 80 167 Q86 174 84 188 Z" fill="#B07050" fillOpacity="0.55" />
-                                <ellipse cx="188" cy="185" rx="9" ry="4" fill="#9C6644" fillOpacity="0.35" />
-                                <path d="M179 185 Q177 174 182 168 Q185 164 188 163 Q191 164 194 168 Q199 174 197 185 Z" fill="#B07050" fillOpacity="0.45" />
-
-                                {/* Floating sparkles */}
-                                {[[50, 80], [200, 60], [220, 100], [40, 130]].map(([x, y], i) => (
-                                    <g key={i} opacity="0.6">
-                                        <circle cx={x} cy={y} r="2.5" fill="#D97706" />
-                                        <line x1={x - 5} y1={y} x2={x + 5} y2={y} stroke="#D97706" strokeWidth="1" />
-                                        <line x1={x} y1={y - 5} x2={x} y2={y + 5} stroke="#D97706" strokeWidth="1" />
-                                    </g>
-                                ))}
-                            </svg>
-
-                            {/* ONDC badge floating top-right */}
-                            <div
-                                className="absolute top-5 right-5 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold"
-                                style={{ background: "rgba(255,255,255,0.88)", color: "#7C3AED", backdropFilter: "blur(6px)", border: "1px solid rgba(124,58,237,0.2)" }}
-                            >
-                                ✨ ONDC Ready
-                            </div>
-
-                            {/* App logo top-left */}
-                            <div className="absolute top-5 left-5 flex items-center gap-2">
+                            {/* ── Authentic Handcrafted Logo Mark ── */}
+                            <div className="absolute top-4 left-5 flex items-center gap-2.5 z-10">
                                 <div
-                                    className="w-9 h-9 rounded-xl flex items-center justify-center"
-                                    style={{ background: "#6B3A2A", boxShadow: "0 4px 12px rgba(107,58,42,0.35)" }}
+                                    className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg"
+                                    style={{
+                                        background: "linear-gradient(135deg, #8B4513 0%, #522718 100%)",
+                                        border: "1.5px solid rgba(255,255,255,0.3)",
+                                    }}
                                 >
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                                        <path d="M12 3C10 5 7 6 5 9c-2 3-1 7 2 9s7 2 9 0c2-2 3-5 2-8-1-3-4-5-6-7z" fill="rgba(255,255,255,0.95)" />
+                                    {/* Traditional Indian Craft / Kalash Emblem */}
+                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                                        <path
+                                            d="M12 2.5C12 2.5 10.5 4.5 9 6H15C13.5 4.5 12 2.5 12 2.5Z"
+                                            fill="#F59E0B"
+                                        />
+                                        <path
+                                            d="M7 8H17M6 11C6 15 8.5 19.5 12 19.5C15.5 19.5 18 15 18 11C18 9 17 8 17 8H7C7 8 6 9 6 11Z"
+                                            stroke="white"
+                                            strokeWidth="1.8"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                        />
+                                        <path
+                                            d="M9 13.5C9 15 10.3 16.5 12 16.5C13.7 16.5 15 15 15 13.5"
+                                            stroke="#F59E0B"
+                                            strokeWidth="1.6"
+                                            strokeLinecap="round"
+                                        />
                                     </svg>
                                 </div>
-                                <span
-                                    className="text-base font-bold"
-                                    style={{ color: "#6B3A2A", fontFamily: "'Noto Serif', serif" }}
-                                >
-                                    Kalakriti
+                                <div>
+                                    <span
+                                        className="text-lg font-bold text-white tracking-wide block leading-none drop-shadow-md"
+                                        style={{ fontFamily: "'Noto Serif', serif" }}
+                                    >
+                                        Kalakriti
+                                    </span>
+                                    <span className="text-[10px] text-amber-200/90 font-medium tracking-wider uppercase block mt-0.5">
+                                        कारीगर साथी
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* ONDC Badge top-right */}
+                            <div
+                                className="absolute top-4 right-5 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold shadow-md z-10"
+                                style={{
+                                    background: "rgba(255,255,255,0.92)",
+                                    color: "#6B3A2A",
+                                    backdropFilter: "blur(8px)",
+                                    border: "1px solid rgba(196,136,107,0.35)",
+                                }}
+                            >
+                                <span className="text-purple-600">✨</span>
+                                <span className="text-purple-800">ONDC Ready</span>
+                            </div>
+
+                            {/* Cultural Tagline Pill on bottom-left of photo */}
+                            <div className="absolute bottom-3 left-5 flex items-center gap-1.5 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/20">
+                                <span className="text-amber-400 text-xs">✦</span>
+                                <span className="text-white/95 text-[11px] font-medium tracking-wide">
+                                    100% प्रामाणिक भारतीय हस्तशिल्प
                                 </span>
                             </div>
                         </div>
 
-                        {/* ── Content card ── */}
-                        <div className="flex-1 flex flex-col px-6 pt-6 pb-4">
-                            {/* Welcome text */}
-                            <div className="mb-6">
+                        {/* ── Content Card ── */}
+                        <div className="flex-1 flex flex-col px-6 pt-3 pb-4">
+                            {/* Welcome Heading */}
+                            <div className="mb-5">
                                 <h1
-                                    className="text-2xl font-bold leading-snug mb-2"
+                                    className="text-2xl font-bold leading-tight mb-1.5"
                                     style={{ color: "#3D1F0F", fontFamily: "'Noto Serif', serif" }}
                                 >
                                     कलाकृति में<br />आपका स्वागत है
                                 </h1>
-                                <p className="text-sm leading-relaxed" style={{ color: "#9C6644" }}>
-                                    अपनी कला को सीधे बाज़ार और ONDC से जोड़ें
+                                <p className="text-xs leading-relaxed" style={{ color: "#8B4513" }}>
+                                    अपनी कला को सीधे देश भर के बाज़ार और ONDC नेटवर्क से जोड़ें
                                 </p>
                             </div>
 
                             {/* Mobile input */}
                             <div className="mb-4">
                                 <label
-                                    className="block text-xs font-semibold mb-1.5 uppercase tracking-widest"
+                                    className="block text-[11px] font-bold mb-1.5 uppercase tracking-wider"
                                     style={{ color: "#6B3A2A" }}
                                 >
                                     मोबाइल नंबर
@@ -243,28 +180,24 @@ export default function OnboardingScreen({ onLogin }: { onLogin?: () => void }) 
                                 <div
                                     className="flex items-center rounded-2xl overflow-hidden transition-all duration-200"
                                     style={{
-                                        border: mobile ? "2px solid #6B3A2A" : "1.5px solid rgba(196,136,107,0.5)",
+                                        border: mobile ? "2px solid #6B3A2A" : "1.5px solid rgba(196,136,107,0.45)",
                                         background: "#FFFBF7",
                                         boxShadow: mobile ? "0 0 0 4px rgba(107,58,42,0.08)" : "none",
                                     }}
                                 >
-                                    {/* Flag + prefix */}
+                                    {/* Indian flag + prefix */}
                                     <div
-                                        className="flex items-center gap-2 px-4 py-4 flex-shrink-0"
-                                        style={{ borderRight: "1.5px solid rgba(196,136,107,0.3)" }}
+                                        className="flex items-center gap-2 px-3.5 py-3.5 flex-shrink-0"
+                                        style={{ borderRight: "1.5px solid rgba(196,136,107,0.25)" }}
                                     >
-                                        {/* Indian flag */}
-                                        <div className="flex flex-col overflow-hidden rounded-sm flex-shrink-0" style={{ width: 24, height: 16 }}>
+                                        <div className="flex flex-col overflow-hidden rounded-xs flex-shrink-0 shadow-xs" style={{ width: 22, height: 15 }}>
                                             <div style={{ flex: 1, background: "#FF9933" }} />
                                             <div style={{ flex: 1, background: "white", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                                <div style={{ width: 7, height: 7, borderRadius: "50%", border: "1px solid #000080" }} />
+                                                <div style={{ width: 5, height: 5, borderRadius: "50%", border: "1px solid #000080" }} />
                                             </div>
                                             <div style={{ flex: 1, background: "#138808" }} />
                                         </div>
-                                        <span className="text-sm font-bold" style={{ color: "#3D1F0F" }}>+91</span>
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                                            <path d="M6 9l6 6 6-6" stroke="#9C6644" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                        </svg>
+                                        <span className="text-sm font-bold text-[#3D1F0F]">+91</span>
                                     </div>
 
                                     <input
@@ -272,130 +205,93 @@ export default function OnboardingScreen({ onLogin }: { onLogin?: () => void }) 
                                         maxLength={10}
                                         value={mobile}
                                         onChange={(e) => setMobile(e.target.value.replace(/\D/g, ""))}
-                                        placeholder="मोबाइल नंबर दर्ज करें"
-                                        className="flex-1 px-4 py-4 text-base outline-none bg-transparent"
+                                        placeholder="10 अंकों का नंबर दर्ज करें"
+                                        className="flex-1 px-4 py-3.5 text-base outline-none bg-transparent"
                                         style={{
                                             color: "#3D1F0F",
-                                            fontFamily: mobile ? "'Poppins', sans-serif" : "'Noto Serif', serif",
+                                            fontFamily: "'Poppins', sans-serif",
                                         }}
                                     />
 
                                     {/* Clear button */}
                                     {mobile.length > 0 && (
                                         <button
+                                            type="button"
                                             onClick={() => setMobile("")}
-                                            className="px-4 py-4"
-                                            style={{ color: "#C4886B" }}
+                                            className="px-3.5 py-3.5 text-[#C4886B] active:scale-90 transition"
                                         >
-                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                                                <circle cx="12" cy="12" r="10" fill="rgba(196,136,107,0.15)" />
-                                                <path d="M15 9l-6 6M9 9l6 6" stroke="#9C6644" strokeWidth="1.8" strokeLinecap="round" />
-                                            </svg>
+                                            ✕
                                         </button>
                                     )}
                                 </div>
-                                {mobile.length > 0 && mobile.length < 10 && (
-                                    <p className="text-xs mt-1.5 ml-1" style={{ color: "#C4886B" }}>
-                                        {10 - mobile.length} अंक और दर्ज करें
-                                    </p>
-                                )}
+
                                 {mobile.length === 10 && (
-                                    <p className="text-xs mt-1.5 ml-1 flex items-center gap-1" style={{ color: "#16A34A" }}>
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                                            <path d="M20 6L9 17l-5-5" stroke="#16A34A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                                        </svg>
-                                        नंबर सही है
+                                    <p className="text-xs mt-1.5 ml-1 flex items-center gap-1 font-semibold text-emerald-700">
+                                        ✓ नंबर सही है
                                     </p>
                                 )}
                             </div>
 
-                            {/* OTP button */}
+                            {/* OTP Button */}
                             <button
+                                type="button"
                                 onClick={() => {
                                     if (mobile.length === 10) {
                                         const testOtp = Math.floor(100000 + Math.random() * 900000);
-                                        alert(`TEST MODE: Your OTP is ${testOtp}`);
+                                        alert(`डेमो OTP: ${testOtp}`);
                                         setStage("otp");
                                     }
                                 }}
-                                className="w-full flex items-center justify-center gap-3 rounded-2xl py-4 font-bold text-base transition-all duration-200 active:scale-[0.97] mb-5"
+                                disabled={mobile.length !== 10}
+                                className="w-full flex items-center justify-center gap-2.5 rounded-2xl py-4 font-bold text-base transition-all active:scale-[0.98] mb-4 disabled:opacity-50"
                                 style={{
-                                    background: mobile.length === 10
-                                        ? "linear-gradient(135deg, #92400E 0%, #6B3A2A 100%)"
-                                        : "rgba(196,136,107,0.35)",
-                                    color: mobile.length === 10 ? "white" : "#C4886B",
-                                    boxShadow: mobile.length === 10 ? "0 10px 32px rgba(107,58,42,0.42)" : "none",
+                                    background: "linear-gradient(135deg, #8B4513 0%, #6B3A2A 100%)",
+                                    color: "white",
+                                    boxShadow: mobile.length === 10 ? "0 10px 28px rgba(107,58,42,0.38)" : "none",
                                     cursor: mobile.length === 10 ? "pointer" : "not-allowed",
                                 }}
                             >
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                                    <rect x="5" y="11" width="14" height="10" rx="2"
-                                        stroke={mobile.length === 10 ? "white" : "#C4886B"} strokeWidth="1.8" />
-                                    <path d="M8 11V7a4 4 0 018 0v4"
-                                        stroke={mobile.length === 10 ? "white" : "#C4886B"} strokeWidth="1.8" strokeLinecap="round" />
-                                </svg>
                                 <span style={{ fontFamily: "'Noto Serif', serif" }}>OTP प्राप्त करें</span>
+                                <span>➔</span>
                             </button>
 
-                            {/* OR divider */}
-                            <div className="flex items-center gap-4 mb-5">
-                                <div className="flex-1" style={{ height: 1, background: "rgba(196,136,107,0.3)" }} />
-                                <span
-                                    className="text-xs font-semibold px-3 py-1 rounded-full"
-                                    style={{ color: "#9C6644", background: "rgba(196,136,107,0.1)" }}
-                                >
+                            {/* Divider */}
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="flex-1 h-px bg-stone-200" />
+                                <span className="text-[11px] font-semibold text-[#9C6644] px-2 py-0.5 rounded-full bg-stone-100">
                                     या
                                 </span>
-                                <div className="flex-1" style={{ height: 1, background: "rgba(196,136,107,0.3)" }} />
+                                <div className="flex-1 h-px bg-stone-200" />
                             </div>
 
-                            {/* Google sign-in */}
+                            {/* Google Sign-In */}
                             <button
+                                type="button"
                                 onClick={() => {
-                                    alert("Google Sign-In Successful! Logging in...");
                                     if (onLogin) onLogin();
                                 }}
-                                className="w-full flex items-center justify-center gap-3 rounded-2xl py-3.5 font-semibold text-sm transition-all duration-200 active:scale-[0.97] mb-4"
-                                style={{
-                                    background: "#FFFBF7",
-                                    color: "#3D1F0F",
-                                    border: "1.5px solid rgba(196,136,107,0.4)",
-                                    boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
-                                }}
+                                className="w-full flex items-center justify-center gap-3 rounded-2xl py-3.5 font-semibold text-sm transition-all active:scale-[0.98] mb-4 bg-white border border-[#E0C0A8] shadow-xs hover:shadow-md"
+                                style={{ color: "#3D1F0F" }}
                             >
-                                {/* Google G */}
-                                <svg width="20" height="20" viewBox="0 0 24 24">
+                                <svg width="18" height="18" viewBox="0 0 24 24">
                                     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
                                     <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
                                     <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
                                     <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
                                 </svg>
-                                <span style={{ fontFamily: "'Noto Serif', serif" }}>Google से साइन इन करें</span>
+                                <span>Google से साइन इन करें</span>
                             </button>
 
-                            <p className="text-center text-xs" style={{ color: "#C4886B" }}>
-                                साइन इन करके आप हमारी{" "}
-                                <span style={{ color: "#6B3A2A", textDecoration: "underline", cursor: "pointer" }}>
-                                    शर्तें और गोपनीयता नीति
-                                </span>{" "}
-                                से सहमत हैं
-                            </p>
-                        </div>
-
-                        {/* Trust badge */}
-                        <div
-                            className="flex-shrink-0 flex items-center justify-center gap-2 py-3 mx-6 mb-5 rounded-2xl"
-                            style={{ background: "rgba(22,163,74,0.08)", border: "1px solid rgba(22,163,74,0.2)" }}
-                        >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                                <path d="M12 2L3 6v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V6l-9-4z" fill="rgba(22,163,74,0.15)" stroke="#16A34A" strokeWidth="1.8" strokeLinejoin="round" />
-                                <path d="M9 12l2 2 4-4" stroke="#16A34A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                            <span className="text-xs font-semibold" style={{ color: "#16A34A" }}>
-                                ONDC नेटवर्क द्वारा प्रमाणित
-                            </span>
-                            <span className="text-xs" style={{ color: "rgba(22,163,74,0.6)" }}>|</span>
-                            <span className="text-xs font-medium" style={{ color: "#16A34A" }}>100% सुरक्षित</span>
+                            {/* Trust Badge */}
+                            <div
+                                className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl mt-auto"
+                                style={{ background: "rgba(22,163,74,0.08)", border: "1px solid rgba(22,163,74,0.2)" }}
+                            >
+                                <span className="text-emerald-700 text-xs">🛡️</span>
+                                <span className="text-[11px] font-semibold text-emerald-800">
+                                    ONDC नेटवर्क द्वारा प्रमाणित · 100% सुरक्षित
+                                </span>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -405,148 +301,74 @@ export default function OnboardingScreen({ onLogin }: { onLogin?: () => void }) 
                     <div className="flex-1 flex flex-col px-6 pt-8" style={{ overflow: "hidden" }}>
                         {/* Back */}
                         <button
+                            type="button"
                             onClick={() => setStage("landing")}
-                            className="flex items-center gap-2 mb-8 self-start"
-                            style={{ color: "#6B3A2A" }}
+                            className="flex items-center gap-2 mb-6 self-start text-[#6B3A2A] active:scale-95 transition"
                         >
-                            <div
-                                className="w-9 h-9 rounded-full flex items-center justify-center"
-                                style={{ background: "rgba(107,58,42,0.08)" }}
-                            >
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                                    <path d="M15 18l-6-6 6-6" stroke="#6B3A2A" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
+                            <div className="w-8 h-8 rounded-full flex items-center justify-center bg-stone-100">
+                                ❮
                             </div>
-                            <span className="text-sm font-semibold" style={{ fontFamily: "'Noto Serif', serif" }}>वापस जाएं</span>
+                            <span className="text-xs font-semibold" style={{ fontFamily: "'Noto Serif', serif" }}>
+                                वापस जाएं
+                            </span>
                         </button>
 
-                        {/* OTP illustration */}
-                        <div className="flex justify-center mb-6">
-                            <div
-                                className="relative w-28 h-28 rounded-3xl flex items-center justify-center"
-                                style={{ background: "linear-gradient(135deg, #FEF0E4 0%, #F5DEC8 100%)", border: "2px solid rgba(196,136,107,0.3)" }}
-                            >
-                                {/* Phone body */}
-                                <svg width="60" height="72" viewBox="0 0 60 72" fill="none">
-                                    <rect x="8" y="4" width="44" height="64" rx="8" fill="#6B3A2A" fillOpacity="0.15" stroke="#9C6644" strokeWidth="2" />
-                                    <rect x="14" y="12" width="32" height="44" rx="4" fill="#FFF8F3" />
-                                    {/* Message lines */}
-                                    <rect x="18" y="18" width="24" height="3" rx="1.5" fill="#C4886B" fillOpacity="0.5" />
-                                    <rect x="20" y="25" width="20" height="3" rx="1.5" fill="#C4886B" fillOpacity="0.3" />
-                                    {/* OTP digits */}
-                                    {[0, 1, 2, 3, 4, 5].map((_, i) => (
-                                        <rect key={i} x={16 + i * 5} y="36" width="4" height="6" rx="1" fill={i < 3 ? "#6B3A2A" : "rgba(196,136,107,0.3)"} />
-                                    ))}
-                                    <circle cx="30" cy="62" r="3" fill="#9C6644" fillOpacity="0.4" />
-                                </svg>
-                                {/* Pulse ring */}
-                                <div
-                                    className="absolute -inset-3 rounded-3xl animate-ping"
-                                    style={{ border: "2px solid rgba(107,58,42,0.15)", animationDuration: "2s" }}
-                                />
+                        <div className="text-center mb-6">
+                            <div className="w-16 h-16 rounded-3xl bg-amber-100/70 border border-amber-300 flex items-center justify-center text-2xl mx-auto mb-3 shadow-xs">
+                                📱
                             </div>
+                            <h2 className="text-xl font-bold text-[#3D1F0F]" style={{ fontFamily: "'Noto Serif', serif" }}>
+                                OTP दर्ज करें
+                            </h2>
+                            <p className="text-xs text-[#8B4513] mt-1">
+                                +91 {mobile.slice(0, 5)}••••• पर भेजा गया 6-अंकों का कोड
+                            </p>
                         </div>
 
-                        <h2
-                            className="text-2xl font-bold mb-2 text-center"
-                            style={{ color: "#3D1F0F", fontFamily: "'Noto Serif', serif" }}
-                        >
-                            OTP दर्ज करें
-                        </h2>
-                        <p className="text-sm text-center mb-1" style={{ color: "#9C6644" }}>
-                            हमने आपके नंबर पर OTP भेजा है
-                        </p>
-                        <p className="text-base font-bold text-center mb-8" style={{ color: "#6B3A2A", fontFamily: "'Noto Serif', serif" }}>
-                            +91 {mobile.slice(0, 5)}·····
-                        </p>
-
-                        {/* OTP boxes */}
-                        <div className="flex gap-3 justify-center mb-3">
+                        {/* OTP Boxes */}
+                        <div className="flex gap-2 justify-center mb-4">
                             {otp.map((digit, i) => (
-                                <div key={i} className="relative">
-                                    <input
-                                        id={`otp-${i}`}
-                                        type="tel"
-                                        inputMode="numeric"
-                                        maxLength={1}
-                                        value={digit}
-                                        onChange={(e) => handleOtpChange(i, e.target.value)}
-                                        onKeyDown={(e) => handleOtpKey(i, e)}
-                                        onFocus={() => setFocusedOtp(i)}
-                                        onBlur={() => setFocusedOtp(null)}
-                                        className="w-12 h-14 text-center text-xl font-bold rounded-2xl outline-none transition-all duration-200"
-                                        style={{
-                                            background: digit ? "#FFF0E6" : "#FFFBF7",
-                                            border: focusedOtp === i
-                                                ? "2.5px solid #6B3A2A"
-                                                : digit
-                                                    ? "2px solid rgba(107,58,42,0.5)"
-                                                    : "1.5px solid rgba(196,136,107,0.4)",
-                                            color: "#3D1F0F",
-                                            boxShadow: focusedOtp === i ? "0 0 0 4px rgba(107,58,42,0.1)" : "none",
-                                            fontFamily: "'Poppins', sans-serif",
-                                        }}
-                                    />
-                                    {/* Underline dot when filled */}
-                                    {digit && (
-                                        <div
-                                            className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full"
-                                            style={{ background: "#6B3A2A" }}
-                                        />
-                                    )}
-                                </div>
+                                <input
+                                    key={i}
+                                    id={`otp-${i}`}
+                                    type="tel"
+                                    inputMode="numeric"
+                                    maxLength={1}
+                                    value={digit}
+                                    onChange={(e) => handleOtpChange(i, e.target.value)}
+                                    onKeyDown={(e) => handleOtpKey(i, e)}
+                                    onFocus={() => setFocusedOtp(i)}
+                                    onBlur={() => setFocusedOtp(null)}
+                                    className="w-12 h-14 text-center text-xl font-bold rounded-2xl outline-none transition-all"
+                                    style={{
+                                        background: digit ? "#FFF0E6" : "#FFFBF7",
+                                        border: focusedOtp === i
+                                            ? "2.5px solid #6B3A2A"
+                                            : digit
+                                                ? "2px solid rgba(107,58,42,0.5)"
+                                                : "1.5px solid rgba(196,136,107,0.4)",
+                                        color: "#3D1F0F",
+                                    }}
+                                />
                             ))}
                         </div>
 
-                        {/* Resend */}
-                        <div className="flex items-center justify-center gap-1 mb-8">
-                            <span className="text-xs" style={{ color: "#9C6644" }}>OTP नहीं मिला?</span>
-                            <button className="text-xs font-bold" style={{ color: "#6B3A2A" }}>
-                                दोबारा भेजें
-                            </button>
-                            <span className="text-xs" style={{ color: "#C4886B" }}>(30s)</span>
-                        </div>
-
-                        {/* Verify button */}
+                        {/* Verify Button */}
                         <button
+                            type="button"
                             onClick={() => {
-                                if (otp.every((d) => d)) { // Checks if all 6 boxes are filled
-                                    alert("Verification Successful! Logging you in...");
-                                    if (onLogin) onLogin(); // Tells the main app to move to the dashboard
+                                if (otp.every((d) => d)) {
+                                    if (onLogin) onLogin();
                                 }
                             }}
-                            className="w-full flex items-center justify-center gap-3 rounded-2xl py-4 font-bold text-base transition-all duration-200 active:scale-[0.97]"
+                            disabled={!otp.every((d) => d)}
+                            className="w-full flex items-center justify-center gap-2 rounded-2xl py-4 font-bold text-base text-white shadow-lg transition-all active:scale-[0.98] mt-3 disabled:opacity-50"
                             style={{
-                                background: otp.every((d) => d)
-                                    ? "linear-gradient(135deg, #92400E 0%, #6B3A2A 100%)"
-                                    : "rgba(196,136,107,0.3)",
-                                color: otp.every((d) => d) ? "white" : "#C4886B",
-                                boxShadow: otp.every((d) => d) ? "0 10px 32px rgba(107,58,42,0.42)" : "none",
+                                background: "linear-gradient(135deg, #8B4513 0%, #6B3A2A 100%)",
                             }}
                         >
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                                <path d="M20 6L9 17l-5-5"
-                                    stroke={otp.every((d) => d) ? "white" : "#C4886B"}
-                                    strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                            <span style={{ fontFamily: "'Noto Serif', serif" }}>OTP सत्यापित करें</span>
+                            <span>✓ OTP सत्यापित करें</span>
                         </button>
-
-                        {/* Trust badge */}
-                        <div
-                            className="flex items-center justify-center gap-2 mt-6 py-3 rounded-2xl"
-                            style={{ background: "rgba(22,163,74,0.08)", border: "1px solid rgba(22,163,74,0.2)" }}
-                        >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                                <path d="M12 2L3 6v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V6l-9-4z" fill="rgba(22,163,74,0.15)" stroke="#16A34A" strokeWidth="1.8" strokeLinejoin="round" />
-                                <path d="M9 12l2 2 4-4" stroke="#16A34A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                            <span className="text-xs font-semibold" style={{ color: "#16A34A" }}>
-                                ONDC नेटवर्क द्वारा प्रमाणित
-                            </span>
-                            <span className="text-xs" style={{ color: "rgba(22,163,74,0.5)" }}>|</span>
-                            <span className="text-xs font-medium" style={{ color: "#16A34A" }}>100% सुरक्षित</span>
-                        </div>
                     </div>
                 )}
             </div>
