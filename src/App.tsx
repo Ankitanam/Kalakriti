@@ -1,4 +1,5 @@
 // src/App.tsx
+import OndcBuyerScreen from "./OndcBuyerScreen";
 import ArtisanDashboard from "./ArtisanDashboard";
 import { useState, useRef } from "react";
 import CatalogPreview, { CatalogData } from "./CatalogPreview";
@@ -60,7 +61,7 @@ export default function App() {
   });
 
   // Current Screen
-  const [screen, setScreen] = useState<"onboarding" | "capture" | "preview" | "dashboard">(() => {
+  const [screen, setScreen] = useState<"onboarding" | "capture" | "preview" | "dashboard" | "buyer">(() => {
     try {
       const loggedIn = localStorage.getItem("artisan_logged_in") === "true";
       return loggedIn ? "dashboard" : "onboarding";
@@ -102,6 +103,36 @@ export default function App() {
     localStorage.removeItem("artisan_logged_in");
     setIsLoggedIn(false);
     setScreen("onboarding");
+  };
+  // ── Step 4: When Buyer purchases on PhonePe/Paytm screen ──
+  const handlePlaceOrderFromBuyer = (
+    product: StoreItem,
+    platform: "PhonePe Pincode" | "Paytm ONDC"
+  ) => {
+    // 1. Create ONDC order entry
+    const newOrder = {
+      orderId: `ONDC-${Math.floor(1000 + Math.random() * 9000)}`,
+      productTitle: product.title_hi || "हस्तशिल्प उत्पाद",
+      buyerCity: "मुंबई (Maharashtra)",
+      buyerPlatform: platform,
+      amount: product.suggested_price || 199,
+      courier: "India Post (डाक घर)",
+      status: "Pending",
+      orderDate: "अभी-अभी (Just now)",
+    };
+
+    // 2. Save order to localStorage
+    const existingOrders = JSON.parse(localStorage.getItem("kalakriti_orders") || "[]");
+    localStorage.setItem("kalakriti_orders", JSON.stringify([newOrder, ...existingOrders]));
+
+    // 3. Decrement inventory stock by 1
+    const updatedInv = inventory.map((item) =>
+      item.id === product.id && item.quantity > 0
+        ? { ...item, quantity: item.quantity - 1 }
+        : item
+    );
+    setInventory(updatedInv);
+    localStorage.setItem("kalakriti_inventory", JSON.stringify(updatedInv));
   };
 
   // ── Stock / Quantity Handlers ──
@@ -467,7 +498,16 @@ Output ONLY valid JSON matching this schema:
       />
     );
   }
-
+// ── SCREEN: Buyer Shopping View (Option A) ──
+  if (screen === "buyer") {
+    return (
+      <OndcBuyerScreen
+        inventory={inventory}
+        onPlaceOrder={handlePlaceOrderFromBuyer}
+        onBackToArtisan={() => setScreen("dashboard")}
+      />
+    );
+  }
   // ── CAPTURE SCREEN (Rebranded Kalakriti with Painting option) ──
   return (
     <div
@@ -533,8 +573,16 @@ Output ONLY valid JSON matching this schema:
           >
             दुकान ({inventory.length})
           </button>
-        </div>
-
+          {/* ── 👇 ठीक यहाँ Enter दबाकर यह कोड पेस्ट करें ── */}
+     <button
+       type="button"
+       onClick={() => setScreen("buyer")}
+       className="px-2.5 py-1.5 rounded-full text-xs font-bold text-white bg-purple-700/80 border border-purple-400/40 active:scale-95 transition"
+       title="Switch to Buyer View"
+     >
+       🛍️ ग्राहक दृश्य (Buyer)
+     </button>
+ </div>
         {/* Form Body */}
         <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5" style={{ scrollbarWidth: "none" }}>
           <div>
