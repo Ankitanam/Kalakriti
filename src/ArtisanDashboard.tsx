@@ -23,6 +23,7 @@ interface ArtisanDashboardProps {
   onDecreaseQty: (id: string) => void;
   onRemoveProduct: (id: string) => void;
   onDispatchOrder?: (orderId: string) => void;
+  onSwitchToBuyer?: () => void;
   onLogout: () => void;
 }
 
@@ -36,6 +37,7 @@ export default function ArtisanDashboard({
   onDecreaseQty,
   onRemoveProduct,
   onDispatchOrder,
+  onSwitchToBuyer,
   onLogout,
 }: ArtisanDashboardProps) {
   const [activeTab, setActiveTab] = useState<"products" | "orders" | "earnings">("products");
