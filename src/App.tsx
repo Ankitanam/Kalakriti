@@ -1,11 +1,12 @@
 // src/App.tsx
-import OndcBuyerScreen from "./OndcBuyerScreen";
-import ArtisanDashboard from "./ArtisanDashboard";
 import { useState, useRef } from "react";
 import CatalogPreview, { CatalogData } from "./CatalogPreview";
 import OnboardingScreen from "./OnboardingScreen";
+import ArtisanDashboard, { OrderItem } from "./ArtisanDashboard";
+import OndcBuyerScreen from "./OndcBuyerScreen";
+import { CartItem, ConfirmedOrder } from "./utils/becknEngine";
 
-// 1. Categories including Painting (चित्रकारी)
+// Craft Categories
 const CATEGORIES = [
   { hi: "चित्रकारी", en: "Painting" },
   { hi: "मिट्टी", en: "Pottery" },
@@ -16,7 +17,7 @@ const CATEGORIES = [
 
 export interface StoreItem extends CatalogData {
   id: string;
-  quantity: number; // 👈 Stock / Quantity Support
+  quantity: number;
   publishedAt?: string;
   categoryName?: string;
 }
@@ -24,34 +25,59 @@ export interface StoreItem extends CatalogData {
 const INITIAL_SEED: StoreItem[] = [
   {
     id: "seed-1",
-    title_hi: "मधुबनी सूर्य लोककला पेंटिंग",
-    title_en: "Handmade Madhubani Sun Art (Unframed)",
-    suggested_price: 299,
-    quantity: 1,
-    imageUrl: "https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=500",
-    artisan_name: "माधुरी देवी",
-    artisan_region: "मिथिला, बिहार",
-    quick_summary_hi: "पारंपरिक मिथिला शैली में हस्तनिर्मित सुंदर मधुबनी पेंटिंग।",
-    quick_summary_en: "Authentic handmade traditional folk painting on handmade paper.",
+    title_hi: "राजस्थानी पारंपरिक कठपुतली जोड़ा",
+    title_en: "Rajasthani Traditional Handmade Puppets Pair",
+    suggested_price: 349,
+    quantity: 3, // 👈 3 pieces stock
+    imageUrl: "https://images.unsplash.com/photo-1599818471241-10515152865c?w=500",
+    artisan_name: "शंकर लाल भाट",
+    artisan_region: "जयपुर, राजस्थान",
+    quick_summary_hi: "कपड़े और लकड़ी से हस्तनिर्मित पारंपरिक राजस्थानी कठपुतली।",
+    quick_summary_en: "Authentic handcrafted traditional Rajasthani decorative puppet pair.",
     specs_hi: [
-      { label: "कला / शिल्प", value: "मधुबनी पेंटिंग" },
-      { label: "सामग्री", value: "हैंडमेड पेपर और प्राकृतिक रंग" },
-      { label: "आकार", value: "A4 आकार" },
-      { label: "उपयोग", value: "गृह सज्जा और उपहार" }
+      { label: "कला शैली", value: "राजस्थानी कठपुतली शिल्प" },
+      { label: "सामग्री", value: "लकड़ी, गोटा-पट्टी व कपड़ा" },
+      { label: "आकार", value: "ऊंचाई लगभग 12 इंच" },
+      { label: "उपयोग", value: "गृह सज्जा, सांस्कृतिक उपहार" }
     ],
     specs_en: [
-      { label: "Art Form", value: "Madhubani Folk Art" },
-      { label: "Material", value: "Handmade Paper & Natural Dyes" },
-      { label: "Size", value: "A4 Sheet" },
-      { label: "Best For", value: "Wall Decor, Gifting" }
+      { label: "Craft Type", value: "Rajasthani Puppet Craft" },
+      { label: "Material", value: "Wood, Traditional Fabrics & Lace" },
+      { label: "Size", value: "Height approx. 12 inches" },
+      { label: "Best For", value: "Home Aesthetics, Cultural Gifting" }
     ],
-    tags: ["मधुबनी", "Painting", "ONDC Live"],
+    tags: ["Puppets", "Rajasthan", "ONDC Live"],
+    publishedAt: "आज"
+  },
+  {
+    id: "seed-2",
+    title_hi: "सजावटी हस्तनिर्मित लाल मिट्टी का कलश",
+    title_en: "Decorative Handcrafted Red Terracotta Kalash",
+    suggested_price: 199,
+    quantity: 5, // 👈 5 pieces stock
+    imageUrl: "https://images.unsplash.com/photo-1604264726154-26480e76f4e1?w=500",
+    artisan_name: "रमेश प्रजापति",
+    artisan_region: "अलवर, राजस्थान",
+    quick_summary_hi: "पारंपरिक लाल मिट्टी से बना सुंदर सजावटी कलश।",
+    quick_summary_en: "Traditional red clay pot with stone and zari embellishments.",
+    specs_hi: [
+      { label: "कला शैली", value: "पारंपरिक टेराकोटा" },
+      { label: "सामग्री", value: "100% शुद्ध लाल मिट्टी" },
+      { label: "आकार", value: "मध्यम (ऊंचाई ~7 इंच)" },
+      { label: "उपयोग", value: "गृह सज्जा, पूजा, त्यौहार" }
+    ],
+    specs_en: [
+      { label: "Craft Type", value: "Terracotta Pottery" },
+      { label: "Material", value: "Pure Red Clay" },
+      { label: "Size", value: "Medium (~7 inches)" },
+      { label: "Best For", value: "Festive Decor, Gifting" }
+    ],
+    tags: ["Terracotta", "Handmade", "ONDC Live"],
     publishedAt: "आज"
   }
 ];
 
 export default function App() {
-  // Login Session
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
     try {
       return localStorage.getItem("artisan_logged_in") === "true";
@@ -60,23 +86,55 @@ export default function App() {
     }
   });
 
-  // Current Screen
+  const [activeRole, setActiveRole] = useState<"seller" | "buyer">(() => {
+    try {
+      return (localStorage.getItem("user_role") as "seller" | "buyer") || "seller";
+    } catch {
+      return "seller";
+    }
+  });
+
   const [screen, setScreen] = useState<"onboarding" | "capture" | "preview" | "dashboard" | "buyer">(() => {
     try {
       const loggedIn = localStorage.getItem("artisan_logged_in") === "true";
-      return loggedIn ? "dashboard" : "onboarding";
+      const savedRole = localStorage.getItem("user_role");
+      if (!loggedIn) return "onboarding";
+      return savedRole === "buyer" ? "buyer" : "dashboard";
     } catch {
       return "onboarding";
     }
   });
 
-  // Inventory list with quantity
+  // ── Inventory State ──
   const [inventory, setInventory] = useState<StoreItem[]>(() => {
     try {
       const saved = localStorage.getItem("kalakriti_inventory");
       return saved ? JSON.parse(saved) : INITIAL_SEED;
     } catch {
       return INITIAL_SEED;
+    }
+  });
+
+  // ── Step 5: Shared Orders State for Two-Way Live Sync ──
+  const [orders, setOrders] = useState<OrderItem[]>(() => {
+    try {
+      const saved = localStorage.getItem("kalakriti_orders");
+      return saved
+        ? JSON.parse(saved)
+        : [
+            {
+              orderId: "ONDC-8841",
+              productTitle: "राजस्थानी पारंपरिक कठपुतली जोड़ा",
+              buyerCity: "मुंबई (Maharashtra)",
+              buyerPlatform: "PhonePe Pincode",
+              amount: 349,
+              courier: "India Post (डाक घर)",
+              status: "Pending",
+              orderDate: "आज, 2:15 PM",
+            },
+          ];
+    } catch {
+      return [];
     }
   });
 
@@ -93,49 +151,88 @@ export default function App() {
   const [loadingStage, setLoadingStage] = useState("");
   const [selectedPreviewItem, setSelectedPreviewItem] = useState<CatalogData | null>(null);
 
-  const handleLoginSuccess = () => {
+  const handleLoginSuccess = (role: "seller" | "buyer" = "seller") => {
     localStorage.setItem("artisan_logged_in", "true");
+    localStorage.setItem("user_role", role);
+    setActiveRole(role);
     setIsLoggedIn(true);
-    setScreen("capture"); // Opens photo upload first
+
+    if (role === "buyer") {
+      setScreen("buyer");
+    } else {
+      setScreen("capture");
+    }
   };
 
-  const handleLogout = () => {
+  const handleSellerLogout = () => {
     localStorage.removeItem("artisan_logged_in");
+    setActiveRole("seller");
     setIsLoggedIn(false);
     setScreen("onboarding");
   };
-  // ── Step 4: When Buyer purchases on PhonePe/Paytm screen ──
-  const handlePlaceOrderFromBuyer = (
-    product: StoreItem,
-    platform: "PhonePe Pincode" | "Paytm ONDC"
-  ) => {
-    // 1. Create ONDC order entry
-    const newOrder = {
-      orderId: `ONDC-${Math.floor(1000 + Math.random() * 9000)}`,
-      productTitle: product.title_hi || "हस्तशिल्प उत्पाद",
-      buyerCity: "मुंबई (Maharashtra)",
-      buyerPlatform: platform,
-      amount: product.suggested_price || 199,
+
+  const handleBuyerLogout = () => {
+    localStorage.removeItem("artisan_logged_in");
+    setActiveRole("buyer");
+    setIsLoggedIn(false);
+    setScreen("onboarding");
+  };
+
+  // ── Step 5: Master Order Confirmation Handler (Live Sync) ──
+  const handleOrderConfirmedFromBuyer = (confirmedOrder: ConfirmedOrder, cartItems: CartItem[]) => {
+    // 1. Deduct stock for all purchased items
+    const updatedInventory = inventory.map((invItem) => {
+      const cartMatch = cartItems.find((c) => c.product.id === invItem.id);
+      if (cartMatch) {
+        const remainingQty = Math.max(0, (invItem.quantity || 1) - cartMatch.quantity);
+        return { ...invItem, quantity: remainingQty };
+      }
+      return invItem;
+    });
+
+    setInventory(updatedInventory);
+    localStorage.setItem("kalakriti_inventory", JSON.stringify(updatedInventory));
+
+    // 2. Create Order Entries for the Artisan Dashboard
+    const newArtisanOrders: OrderItem[] = cartItems.map((c) => ({
+      orderId: confirmedOrder.orderId,
+      productTitle: c.product.title_hi || "हस्तशिल्प उत्पाद",
+      buyerCity: `${confirmedOrder.deliveryAddress.city} (${confirmedOrder.deliveryAddress.state})`,
+      buyerPlatform: "PhonePe Pincode",
+      amount: (c.product.suggested_price || 199) * c.quantity,
       courier: "India Post (डाक घर)",
       status: "Pending",
       orderDate: "अभी-अभी (Just now)",
-    };
+    }));
 
-    // 2. Save order to localStorage
-    const existingOrders = JSON.parse(localStorage.getItem("kalakriti_orders") || "[]");
-    localStorage.setItem("kalakriti_orders", JSON.stringify([newOrder, ...existingOrders]));
-
-    // 3. Decrement inventory stock by 1
-    const updatedInv = inventory.map((item) =>
-      item.id === product.id && item.quantity > 0
-        ? { ...item, quantity: item.quantity - 1 }
-        : item
-    );
-    setInventory(updatedInv);
-    localStorage.setItem("kalakriti_inventory", JSON.stringify(updatedInv));
+    const updatedOrders = [...newArtisanOrders, ...orders];
+    setOrders(updatedOrders);
+    localStorage.setItem("kalakriti_orders", JSON.stringify(updatedOrders));
   };
 
-  // ── Stock / Quantity Handlers ──
+  // ── Step 5: Artisan Dispatches Order ──
+  const handleDispatchOrder = (orderId: string) => {
+    const updated = orders.map((o) =>
+      o.orderId === orderId ? { ...o, status: "Shipped" as const } : o
+    );
+    setOrders(updated);
+    localStorage.setItem("kalakriti_orders", JSON.stringify(updated));
+
+    // Also update Buyer order tracking in localStorage
+    try {
+      const buyerOrders: ConfirmedOrder[] = JSON.parse(localStorage.getItem("kalakriti_buyer_orders") || "[]");
+      const updatedBuyerOrders = buyerOrders.map((bo) =>
+        bo.orderId === orderId ? { ...bo, status: "In Transit" as const } : bo
+      );
+      localStorage.setItem("kalakriti_buyer_orders", JSON.stringify(updatedBuyerOrders));
+    } catch (e) {
+      console.warn("Could not sync buyer tracking:", e);
+    }
+
+    alert("📦 आर्डर सफलतापूर्वक पैक हो गया! India Post स्पीड पोस्ट को पिकअप भेज दिया गया है।");
+  };
+
+  // Quantity handlers
   const handleIncreaseQty = (id: string) => {
     const updated = inventory.map((item) =>
       item.id === id ? { ...item, quantity: (item.quantity || 1) + 1 } : item
@@ -167,16 +264,14 @@ export default function App() {
     }
   };
 
-  // Save product and handle duplicates by adding to quantity
+  // Save product to inventory
   const saveProductToInventory = (catalogItem: CatalogData) => {
-    // Check if an item with the same title already exists
     const existingIndex = inventory.findIndex(
       (item) => item.title_hi?.trim() === catalogItem.title_hi?.trim()
     );
 
     let updatedList: StoreItem[];
     if (existingIndex > -1) {
-      // Instead of duplicate card, increase stock quantity!
       updatedList = inventory.map((item, idx) =>
         idx === existingIndex
           ? { ...item, quantity: (item.quantity || 1) + 1, imageUrl: catalogItem.imageUrl || item.imageUrl }
@@ -186,7 +281,7 @@ export default function App() {
       const newEntry: StoreItem = {
         id: Date.now().toString(),
         ...catalogItem,
-        quantity: 1, // default stock 1
+        quantity: 1,
         publishedAt: "आज",
         categoryName: CATEGORIES[selectedCategory].en,
       };
@@ -194,11 +289,7 @@ export default function App() {
     }
 
     setInventory(updatedList);
-    try {
-      localStorage.setItem("kalakriti_inventory", JSON.stringify(updatedList));
-    } catch (e) {
-      console.warn("Could not save to localStorage:", e);
-    }
+    localStorage.setItem("kalakriti_inventory", JSON.stringify(updatedList));
 
     setSelectedFile(null);
     setPhotoUrl(null);
@@ -292,7 +383,7 @@ export default function App() {
         finalImageUrl = cloudResult.enhancedUrl || photoUrl || "";
       }
 
-      setLoadingStage("AI उत्पाद की पहचान कर सही विवरण बना रहा है...");
+      setLoadingStage("AI उत्पाद की पहचान और मूल्य तय कर रहा है...");
       const geminiKey = import.meta.env.VITE_GEMINI_KEY;
       const categoryName = CATEGORIES[selectedCategory].en;
       const userNote = voiceText || "हस्तशिल्प उत्पाद";
@@ -309,16 +400,16 @@ CRITICAL INSTRUCTIONS:
 1. IDENTIFY WHAT IS ACTUALLY IN THE PHOTO:
    - If it's a painting / wall art: describe it as a painting (Madhubani, Mithila, Warli, etc.).
    - If it's pottery / terracotta: describe it as a clay pot / handi.
-   - DO NOT mix up painting with clay pot!
+   - If puppets / toys: describe as Katputli / wooden craft.
 2. PRICING:
    - Painting: ₹249 to ₹399
    - Pottery / Clay: ₹149 to ₹249
-3. CONCISE SPECIFICATIONS: Material, size, usage.
+   - Puppets / Dolls: ₹299 to ₹449
 
 Output ONLY valid JSON matching this schema:
 {
-  "title_hi": "सटीक हिंदी नाम (जैसे: हस्तनिर्मित मधुबनी पेंटिंग या मिट्टी की हांडी)",
-  "title_en": "Accurate English name matching photo",
+  "title_hi": "सटीक हिंदी नाम",
+  "title_en": "Accurate English name",
   "suggested_price": 299,
   "artisan_name": "कारीगर का नाम",
   "artisan_region": "क्षेत्र व राज्य",
@@ -374,79 +465,27 @@ Output ONLY valid JSON matching this schema:
         }
       }
 
-      // Dynamic Fallback
       if (!generatedData) {
-        const isPainting = /painting|मधुबनी|चित्र|paint|art|चित्रकारी/i.test(userNote + categoryName);
-        const isPottery = /mitti|bartan|pot|ghada|handi|मिट्टी|बर्तन/i.test(userNote + categoryName);
-
-        if (isPainting) {
-          generatedData = {
-            title_hi: "पारंपरिक मधुबनी लोककला पेंटिंग",
-            title_en: "Handmade Madhubani Folk Painting",
-            suggested_price: 299,
-            artisan_name: "माधुरी देवी",
-            artisan_region: "मिथिला, बिहार",
-            quick_summary_hi: "प्राकृतिक रंगों और पारंपरिक मिथिला शैली में हस्तनिर्मित प्रामाणिक पेंटिंग।",
-            quick_summary_en: "Authentic handmade traditional Mithila folk painting with natural dyes.",
-            specs_hi: [
-              { label: "कला / शिल्प", value: "मधुबनी लोककला" },
-              { label: "सामग्री", value: "हैंडमेड पेपर एवं प्राकृतिक रंग" },
-              { label: "आकार", value: "A4 शीट" },
-              { label: "उपयोग", value: "गृह सज्जा और उपहार" }
-            ],
-            specs_en: [
-              { label: "Craft Form", value: "Madhubani Folk Art" },
-              { label: "Material", value: "Handmade Paper & Natural Dyes" },
-              { label: "Size", value: "A4 Sheet" },
-              { label: "Best For", value: "Home Decor & Gifting" }
-            ],
-            tags: ["मधुबनी", "Painting", "ONDC Live"]
-          };
-        } else if (isPottery) {
-          generatedData = {
-            title_hi: "हस्तनिर्मित पारंपरिक मिट्टी की हांडी",
-            title_en: "Traditional Handcrafted Terracotta Pot",
-            suggested_price: 180,
-            artisan_name: "रमेश प्रजापति",
-            artisan_region: "अलवर, राजस्थान",
-            quick_summary_hi: "शुद्ध प्राकृतिक लाल मिट्टी से बनी पारंपरिक हांडी।",
-            quick_summary_en: "Organic terracotta pot made with natural red clay.",
-            specs_hi: [
-              { label: "कला / शिल्प", value: "पारंपरिक कुम्हारी" },
-              { label: "सामग्री", value: "100% प्राकृतिक मिट्टी" },
-              { label: "आकार", value: "मध्यम (~1.5 लीटर)" },
-              { label: "उपयोग", value: "खाना पकाना, जल संचयन" }
-            ],
-            specs_en: [
-              { label: "Craft Form", value: "Terracotta Pottery" },
-              { label: "Material", value: "Natural Red Clay" },
-              { label: "Size", value: "Medium (~1.5 L)" },
-              { label: "Best For", value: "Cooking & Decor" }
-            ],
-            tags: ["ClayPot", "Pottery", "ONDC Ready"]
-          };
-        } else {
-          generatedData = {
-            title_hi: `हस्तनिर्मित ${userNote}`,
-            title_en: `Handcrafted ${categoryName}`,
-            suggested_price: 199,
-            artisan_name: "कारीगर साथी",
-            artisan_region: "भारत",
-            quick_summary_hi: `कुशल कारीगरों द्वारा हस्तनिर्मित प्रामाणिक ${userNote}।`,
-            quick_summary_en: `Authentic handcrafted item directly from rural artisans.`,
-            specs_hi: [
-              { label: "शिल्प", value: categoryName },
-              { label: "सामग्री", value: "पर्यावरण-अनुकूल सामग्री" },
-              { label: "उपयोग", value: "गृह सज्जा और दैनिक उपयोग" }
-            ],
-            specs_en: [
-              { label: "Craft", value: categoryName },
-              { label: "Material", value: "Eco-friendly Material" },
-              { label: "Usage", value: "Daily Use & Decor" }
-            ],
-            tags: ["Handmade", "ONDC Ready"]
-          };
-        }
+        generatedData = {
+          title_hi: "पारंपरिक हस्तनिर्मित लोककला उत्पाद",
+          title_en: "Handmade Traditional Craft",
+          suggested_price: 299,
+          artisan_name: "माधुरी देवी",
+          artisan_region: "राजस्थान",
+          quick_summary_hi: "कुशल कारीगरों द्वारा हस्तनिर्मित प्रामाणिक उत्पाद।",
+          quick_summary_en: "Authentic handcrafted craft directly from rural artisan.",
+          specs_hi: [
+            { label: "कला / शिल्प", value: categoryName },
+            { label: "सामग्री", value: "प्राकृतिक सामग्री" },
+            { label: "उपयोग", value: "सजावट एवं उपहार" }
+          ],
+          specs_en: [
+            { label: "Craft", value: categoryName },
+            { label: "Material", value: "Natural Material" },
+            { label: "Best For", value: "Decor & Gifting" }
+          ],
+          tags: ["Handmade", "ONDC Ready"]
+        };
       }
 
       const finalPayload: CatalogData = {
@@ -466,11 +505,22 @@ Output ONLY valid JSON matching this schema:
   };
 
   // ── ROUTING ──
-
   if (!isLoggedIn || screen === "onboarding") {
-    return <OnboardingScreen onLogin={handleLoginSuccess} />;
+    return <OnboardingScreen initialRole={activeRole} onLogin={handleLoginSuccess} />;
   }
 
+  // 1. Buyer Marketplace View (Option A)
+  if (screen === "buyer") {
+    return (
+      <OndcBuyerScreen
+        inventory={inventory}
+        onOrderConfirmed={handleOrderConfirmedFromBuyer} // 👈 Live Step 5 Sync!
+        onLogout={handleBuyerLogout}
+      />
+    );
+  }
+
+  // 2. Listing Preview Screen
   if (screen === "preview" && selectedPreviewItem) {
     return (
       <CatalogPreview
@@ -481,12 +531,14 @@ Output ONLY valid JSON matching this schema:
     );
   }
 
-  // ── SCREEN: "मेरी दुकान" DASHBOARD ──
+  // 3. Artisan Dashboard Screen (Two-way Live Sync)
   if (screen === "dashboard") {
     return (
       <ArtisanDashboard
         inventory={inventory}
+        orders={orders} // 👈 Synced Orders
         onAddNewProduct={() => setScreen("capture")}
+        onBack={() => setScreen("capture")}
         onPreviewProduct={(product) => {
           setSelectedPreviewItem(product);
           setScreen("preview");
@@ -494,21 +546,13 @@ Output ONLY valid JSON matching this schema:
         onIncreaseQty={handleIncreaseQty}
         onDecreaseQty={handleDecreaseQty}
         onRemoveProduct={handleRemoveProduct}
-        onLogout={handleLogout}
+        onDispatchOrder={handleDispatchOrder} // 👈 Dispatch & Tracking Sync
+        onLogout={handleSellerLogout}
       />
     );
   }
-// ── SCREEN: Buyer Shopping View (Option A) ──
-  if (screen === "buyer") {
-    return (
-      <OndcBuyerScreen
-        inventory={inventory}
-        onPlaceOrder={handlePlaceOrderFromBuyer}
-        onBackToArtisan={() => setScreen("dashboard")}
-      />
-    );
-  }
-  // ── CAPTURE SCREEN (Rebranded Kalakriti with Painting option) ──
+
+  // 4. Capture Screen
   return (
     <div
       className="size-full flex items-center justify-center"
@@ -538,7 +582,7 @@ Output ONLY valid JSON matching this schema:
           </div>
         </div>
 
-        {/* Top App Bar with working Back button to Dashboard */}
+        {/* Top App Bar */}
         <div
           className="flex items-center px-4 py-3 gap-3 flex-shrink-0"
           style={{ background: "#6B3A2A" }}
@@ -555,7 +599,6 @@ Output ONLY valid JSON matching this schema:
             </svg>
           </button>
 
-          {/* Rebranded to Kalakriti */}
           <div className="flex-1">
             <h1
               className="text-xl font-bold text-white tracking-wide"
@@ -573,16 +616,8 @@ Output ONLY valid JSON matching this schema:
           >
             दुकान ({inventory.length})
           </button>
-          {/* ── 👇 ठीक यहाँ Enter दबाकर यह कोड पेस्ट करें ── */}
-     <button
-       type="button"
-       onClick={() => setScreen("buyer")}
-       className="px-2.5 py-1.5 rounded-full text-xs font-bold text-white bg-purple-700/80 border border-purple-400/40 active:scale-95 transition"
-       title="Switch to Buyer View"
-     >
-       🛍️ ग्राहक दृश्य (Buyer)
-     </button>
- </div>
+        </div>
+
         {/* Form Body */}
         <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5" style={{ scrollbarWidth: "none" }}>
           <div>

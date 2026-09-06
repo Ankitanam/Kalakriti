@@ -1,13 +1,6 @@
 // src/ArtisanDashboard.tsx
 import React, { useState } from "react";
-import { CatalogData } from "./CatalogPreview";
-
-export interface StoreItem extends CatalogData {
-  id: string;
-  quantity: number;
-  publishedAt?: string;
-  categoryName?: string;
-}
+import { StoreItem } from "./App";
 
 export interface OrderItem {
   orderId: string;
@@ -22,55 +15,48 @@ export interface OrderItem {
 
 interface ArtisanDashboardProps {
   inventory: StoreItem[];
+  orders?: OrderItem[];
   onAddNewProduct: () => void;
+  onBack: () => void;
   onPreviewProduct: (product: StoreItem) => void;
   onIncreaseQty: (id: string) => void;
   onDecreaseQty: (id: string) => void;
   onRemoveProduct: (id: string) => void;
+  onDispatchOrder?: (orderId: string) => void;
   onLogout: () => void;
 }
 
 export default function ArtisanDashboard({
   inventory,
+  orders: propOrders,
   onAddNewProduct,
+  onBack,
   onPreviewProduct,
   onIncreaseQty,
   onDecreaseQty,
   onRemoveProduct,
+  onDispatchOrder,
   onLogout,
 }: ArtisanDashboardProps) {
   const [activeTab, setActiveTab] = useState<"products" | "orders" | "earnings">("products");
   const [selectedCertItem, setSelectedCertItem] = useState<StoreItem | null>(null);
 
-  // Orders State (Persisted in localStorage)
-  const [orders, setOrders] = useState<OrderItem[]>(() => {
+  // Synced Orders State
+  const [localOrders, setLocalOrders] = useState<OrderItem[]>(() => {
     try {
       const saved = localStorage.getItem("kalakriti_orders");
-      return saved
-        ? JSON.parse(saved)
-        : [
-            {
-              orderId: "ONDC-8841",
-              productTitle: "मधुबनी सूर्य लोककला पेंटिंग",
-              buyerCity: "मुंबई (Maharashtra)",
-              buyerPlatform: "PhonePe Pincode",
-              amount: 299,
-              courier: "India Post (डाक घर)",
-              status: "Pending",
-              orderDate: "आज, 2:15 PM",
-            },
-          ];
+      return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
     }
   });
 
-  // Calculate Metrics
+  const orders = propOrders && propOrders.length > 0 ? propOrders : localOrders;
   const totalUnits = inventory.reduce((sum, item) => sum + (item.quantity || 1), 0);
   const totalRevenue = orders.reduce((sum, o) => sum + o.amount, 0);
   const pendingOrders = orders.filter((o) => o.status === "Pending").length;
 
-  // ── Killer Judge Feature: Simulate a Live Buyer Order ──
+  // Simulate Buyer Order (For Judges)
   const handleSimulateBuyerOrder = () => {
     if (inventory.length === 0) {
       alert("कृपया पहले कम से कम एक सामान जोड़ें!");
@@ -87,7 +73,7 @@ export default function ArtisanDashboard({
 
     const newOrder: OrderItem = {
       orderId: `ONDC-${Math.floor(1000 + Math.random() * 9000)}`,
-productTitle: randomProduct.title_hi || "हस्तनिर्मित सामान",
+      productTitle: randomProduct.title_hi || "हस्तनिर्मित सामान",
       buyerCity: cities[Math.floor(Math.random() * cities.length)],
       buyerPlatform: platforms[Math.floor(Math.random() * platforms.length)],
       amount: randomProduct.suggested_price || 199,
@@ -97,22 +83,22 @@ productTitle: randomProduct.title_hi || "हस्तनिर्मित स�
     };
 
     const updatedOrders = [newOrder, ...orders];
-    setOrders(updatedOrders);
+    setLocalOrders(updatedOrders);
     localStorage.setItem("kalakriti_orders", JSON.stringify(updatedOrders));
 
-    // Automatically switch to orders tab to show judges
     setActiveTab("orders");
     alert(`🎉 बधाई हो! ONDC (${newOrder.buyerPlatform}) से ${newOrder.buyerCity} के ग्राहक का ₹${newOrder.amount} का नया आर्डर आया!`);
   };
 
-  // Update order status (Packing -> Dispatched)
-  const handleDispatchOrder = (orderId: string) => {
+  // Dispatch Order Handler
+  const handleDispatch = (orderId: string) => {
+    if (onDispatchOrder) {
+      onDispatchOrder(orderId);
+    }
     const updated = orders.map((o) =>
       o.orderId === orderId ? { ...o, status: "Shipped" as const } : o
     );
-    setOrders(updated);
-    localStorage.setItem("kalakriti_orders", JSON.stringify(updated));
-    alert("📦 आर्डर सफलतापूर्वक पैक हो गया! India Post को पिकअप नोटिफिकेशन भेज दिया गया है।");
+    setLocalOrders(updated);
   };
 
   return (
@@ -147,46 +133,53 @@ productTitle: randomProduct.title_hi || "हस्तनिर्मित स�
 
         {/* Top App Bar */}
         <div
-          className="flex items-center px-4 py-3 gap-2.5 flex-shrink-0"
+          className="flex items-center px-4 py-3 gap-2 flex-shrink-0"
           style={{ background: "#6B3A2A" }}
         >
           <button
             type="button"
-            onClick={onLogout}
+            onClick={onBack}
             className="w-9 h-9 rounded-2xl flex items-center justify-center text-white active:scale-95 transition"
             style={{ background: "rgba(255,255,255,0.15)" }}
-            title="लॉगआउट"
+            title="नया सामान जोड़ें पर वापस जाएं"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
               <path d="M15 18l-6-6 6-6" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
 
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <h1 className="text-lg font-bold text-white tracking-wide" style={{ fontFamily: "'Noto Serif', serif" }}>
+              <h1 className="text-base font-bold text-white tracking-wide truncate" style={{ fontFamily: "'Noto Serif', serif" }}>
                 मेरी दुकान
               </h1>
-              <span className="text-[10px] bg-emerald-500/25 text-emerald-300 font-bold px-1.5 py-0.2 rounded border border-emerald-400/30">
-                ONDC Node #412
+              <span className="text-[9px] bg-emerald-500/25 text-emerald-300 font-bold px-1.5 py-0.5 rounded border border-emerald-400/30">
+                Node #412
               </span>
             </div>
-            <p className="text-[11px] text-white/70">Kalakriti • डिजिटल कारीगर स्टोर</p>
+            <p className="text-[10px] text-white/70 truncate">Kalakriti Store</p>
           </div>
 
-          {/* Quick Simulate Order Button (For Judges) */}
           <button
             type="button"
             onClick={handleSimulateBuyerOrder}
-            className="px-2.5 py-1.5 rounded-xl text-[10px] font-bold text-amber-900 bg-amber-200 hover:bg-amber-300 shadow-xs active:scale-95 transition flex items-center gap-1 border border-amber-400"
-            title="Judges Demo: Simulate Buyer Purchase"
+            className="px-2 py-1 rounded-xl text-[10px] font-bold text-amber-900 bg-amber-200 hover:bg-amber-300 shadow-xs active:scale-95 border border-amber-400"
+            title="Simulate PhonePe Buyer Order"
           >
-            <span>⚡</span>
-            <span>टेस्ट आर्डर</span>
+            ⚡ टेस्ट आर्डर
+          </button>
+
+          <button
+            type="button"
+            onClick={onLogout}
+            className="px-2 py-1 rounded-xl text-[10px] font-bold text-white bg-red-900/60 border border-red-400/40 active:scale-95 transition"
+            title="लॉगआउट"
+          >
+            लॉगआउट
           </button>
         </div>
 
-        {/* ── 3 Navigation Tabs (सामान, आर्डर, कमाई) ── */}
+        {/* ── 3 Tabs (सामान, आर्डर, कमाई) ── */}
         <div className="flex px-4 pt-3 pb-1 bg-[#FFFBF7] border-b border-[#F0DFD2] gap-1.5 flex-shrink-0">
           <button
             type="button"
@@ -235,10 +228,9 @@ productTitle: randomProduct.title_hi || "हस्तनिर्मित स�
 
         {/* ── Scrollable Tab Content ── */}
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3" style={{ scrollbarWidth: "none", paddingBottom: 105 }}>
-          {/* ═══════════ TAB 1: PRODUCTS INVENTORY ═══════════ */}
+          {/* TAB 1: PRODUCTS INVENTORY */}
           {activeTab === "products" && (
             <>
-              {/* Quick Summary Banner */}
               <div
                 className="rounded-2xl p-3.5 flex items-center justify-between shadow-xs"
                 style={{
@@ -261,7 +253,6 @@ productTitle: randomProduct.title_hi || "हस्तनिर्मित स�
                 </div>
               </div>
 
-              {/* Grid Header */}
               <div className="flex items-center justify-between pt-1">
                 <span className="text-xs font-bold text-[#3D1F0F]" style={{ fontFamily: "'Noto Serif', serif" }}>
                   कारीगरी कैटलॉग (Inventory)
@@ -269,7 +260,6 @@ productTitle: randomProduct.title_hi || "हस्तनिर्मित स�
                 <span className="text-[11px] text-[#9C6644]">स्टॉक बदलें या हटाएं</span>
               </div>
 
-              {/* 2-Column Product Grid */}
               {inventory.length === 0 ? (
                 <div className="text-center py-12">
                   <div className="text-4xl mb-2">📦</div>
@@ -285,13 +275,11 @@ productTitle: randomProduct.title_hi || "हस्तनिर्मित स�
                       className="rounded-2xl overflow-hidden bg-white shadow-xs border flex flex-col cursor-pointer transition-all hover:shadow-md"
                       style={{ borderColor: "rgba(196,136,107,0.25)" }}
                     >
-                      {/* Image Thumbnail */}
                       <div className="relative h-32 bg-[#F0EBE3] overflow-hidden">
                         <img src={item.imageUrl} alt={item.title_en} className="w-full h-full object-cover" />
                         <div className="absolute top-1.5 left-1.5 bg-white/95 px-1.5 py-0.5 rounded text-[8px] font-bold text-[#6B3A2A]">
                           ONDC Active
                         </div>
-                        {/* Certificate Tag */}
                         <button
                           type="button"
                           onClick={(e) => {
@@ -299,13 +287,12 @@ productTitle: randomProduct.title_hi || "हस्तनिर्मित स�
                             setSelectedCertItem(item);
                           }}
                           className="absolute top-1.5 right-1.5 bg-amber-100 text-amber-900 border border-amber-300 text-[8px] font-bold px-1.5 py-0.5 rounded shadow-xs"
-                          title="View Digital Provenance Certificate"
+                          title="View Digital Certificate"
                         >
                           📜 प्रमाण
                         </button>
                       </div>
 
-                      {/* Content & Quantity Controls */}
                       <div className="p-2.5 flex-1 flex flex-col justify-between">
                         <div>
                           <h4 className="font-bold text-xs text-[#3D1F0F] line-clamp-1" style={{ fontFamily: "'Noto Serif', serif" }}>
@@ -318,7 +305,6 @@ productTitle: randomProduct.title_hi || "हस्तनिर्मित स�
                           </div>
                         </div>
 
-                        {/* Quantity Increment/Decrement */}
                         <div className="mt-2 pt-2 border-t border-stone-100 flex items-center justify-between">
                           <span className="text-[10px] font-semibold text-[#8B4513]">मात्रा:</span>
                           <div className="flex items-center gap-1 bg-[#FFF0E5] px-1 py-0.5 rounded border border-[#EAC9B0]">
@@ -348,7 +334,6 @@ productTitle: randomProduct.title_hi || "हस्तनिर्मित स�
                           </div>
                         </div>
 
-                        {/* Visual Delete Button */}
                         <button
                           type="button"
                           onClick={(e) => {
@@ -367,7 +352,7 @@ productTitle: randomProduct.title_hi || "हस्तनिर्मित स�
             </>
           )}
 
-          {/* ═══════════ TAB 2: INCOMING ORDERS (BECKN FLOW) ═══════════ */}
+          {/* TAB 2: ORDERS */}
           {activeTab === "orders" && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -382,15 +367,12 @@ productTitle: randomProduct.title_hi || "हस्तनिर्मित स�
                   onClick={handleSimulateBuyerOrder}
                   className="px-2 py-1 rounded-lg text-[10px] font-bold bg-[#6B3A2A] text-white active:scale-95"
                 >
-                  ＋ टेस्ट आर्डर भेजें
+                  ＋ टेस्ट आर्डर
                 </button>
               </div>
 
               {orders.map((ord) => (
-                <div
-                  key={ord.orderId}
-                  className="rounded-2xl p-3 bg-white border border-[#EAC9B0] shadow-xs space-y-2"
-                >
+                <div key={ord.orderId} className="rounded-2xl p-3 bg-white border border-[#EAC9B0] shadow-xs space-y-2">
                   <div className="flex items-center justify-between border-b border-stone-100 pb-2">
                     <div>
                       <span className="text-xs font-bold text-[#3D1F0F]">{ord.productTitle}</span>
@@ -413,7 +395,7 @@ productTitle: randomProduct.title_hi || "हस्तनिर्मित स�
                     {ord.status === "Pending" ? (
                       <button
                         type="button"
-                        onClick={() => handleDispatchOrder(ord.orderId)}
+                        onClick={() => handleDispatch(ord.orderId)}
                         className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs active:scale-95 transition"
                       >
                         ✓ पैक करें व कूरियर बुलाएं
@@ -429,14 +411,10 @@ productTitle: randomProduct.title_hi || "हस्तनिर्मित स�
             </div>
           )}
 
-          {/* ═══════════ TAB 3: EARNINGS & IMPACT LEDGER ═══════════ */}
+          {/* TAB 3: EARNINGS */}
           {activeTab === "earnings" && (
             <div className="space-y-3">
-              {/* Earnings Card */}
-              <div
-                className="rounded-2xl p-4 text-white space-y-2"
-                style={{ background: "linear-gradient(135deg, #6B3A2A 0%, #3D1F0F 100%)" }}
-              >
+              <div className="rounded-2xl p-4 text-white space-y-2" style={{ background: "linear-gradient(135deg, #6B3A2A 0%, #3D1F0F 100%)" }}>
                 <p className="text-[10px] text-white/75 uppercase tracking-wider">कुल शुद्ध आय (Net Payout)</p>
                 <h2 className="text-3xl font-extrabold">₹{Math.round(totalRevenue * 0.85)}</h2>
                 <div className="flex items-center justify-between text-[11px] pt-1 border-t border-white/20">
@@ -445,7 +423,6 @@ productTitle: randomProduct.title_hi || "हस्तनिर्मित स�
                 </div>
               </div>
 
-              {/* Direct Transparency Ledger (Impresses Judges!) */}
               <div className="rounded-2xl p-3.5 bg-white border border-[#EAC9B0] space-y-2.5">
                 <h4 className="text-xs font-bold text-[#3D1F0F] uppercase tracking-wider">
                   पारदर्शी भुगतान ब्रेकडाउन (Direct Impact)
@@ -469,18 +446,11 @@ productTitle: randomProduct.title_hi || "हस्तनिर्मित स�
                   </div>
                 </div>
               </div>
-
-              <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-xs text-[#8B4513] space-y-1">
-                <p className="font-bold">💡 Amazon vs Kalakriti (ONDC):</p>
-                <p className="text-[11px] leading-relaxed">
-                  Amazon और Flipkart 30% से 40% तक कमीशन काटते हैं। Kalakriti पर 85% पैसा सीधा कारीगर के बैंक खाते में जाता है।
-                </p>
-              </div>
             </div>
           )}
         </div>
 
-        {/* ── KalaPramaan Digital Certificate Modal (Judges WOW Factor) ── */}
+        {/* ── Modal for KalaPramaan Digital Certificate ── */}
         {selectedCertItem && (
           <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
             <div className="bg-[#FFFDF9] rounded-3xl p-5 w-full max-w-xs border-2 border-[#C4886B] shadow-2xl space-y-3 relative">
@@ -517,13 +487,6 @@ productTitle: randomProduct.title_hi || "हस्तनिर्मित स�
                   <span className="text-stone-400">GI स्टेटस:</span>
                   <span className="font-bold text-emerald-700">सत्यापित प्रामाणिक हस्तकला</span>
                 </div>
-              </div>
-
-              <div className="pt-2 text-center border-t border-[#EAC9B0]">
-                <div className="w-20 h-20 bg-stone-100 border border-dashed border-[#8B4513] mx-auto flex items-center justify-center text-xs text-[#8B4513] font-mono">
-                  [QR Code]
-                </div>
-                <p className="text-[9px] text-stone-400 mt-1">ग्राहक पार्सल स्कैन करके कारीगर का वीडियो देख सकता है</p>
               </div>
             </div>
           </div>
