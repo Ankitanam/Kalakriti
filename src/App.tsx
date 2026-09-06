@@ -150,6 +150,18 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingStage, setLoadingStage] = useState("");
   const [selectedPreviewItem, setSelectedPreviewItem] = useState<CatalogData | null>(null);
+  // ── Price Selection Modal States ──
+  const [showPriceModal, setShowPriceModal] = useState(false);
+  const [manualPriceInput, setManualPriceInput] = useState("");
+
+  // जब कारीगर "दुकान में सामान जोड़ें" दबाए तो पहले यह पॉपअप खुले
+  const handleOpenPriceModal = () => {
+    if (!selectedFile && !photoUrl) {
+      alert("कृपया पहले कैमरे या गैलरी से सामान की फोटो चुनें!");
+      return;
+    }
+    setShowPriceModal(true);
+  };
 
   const handleLoginSuccess = (role: "seller" | "buyer" = "seller") => {
     localStorage.setItem("artisan_logged_in", "true");
@@ -367,11 +379,9 @@ export default function App() {
     }
   };
 
-  const handleGenerateCatalog = async () => {
-    if (!selectedFile && !photoUrl) {
-      alert("कृपया पहले कैमरे या गैलरी से सामान की फोटो चुनें!");
-      return;
-    }
+  // ── AI Catalog Generation with Custom or AI Pricing (Step 2) ──
+  const handleGenerateCatalog = async (customPrice?: number | null) => {
+    setShowPriceModal(false); // पॉपअप बंद करें
 
     try {
       setIsLoading(true);
@@ -383,7 +393,12 @@ export default function App() {
         finalImageUrl = cloudResult.enhancedUrl || photoUrl || "";
       }
 
-      setLoadingStage("AI उत्पाद की पहचान और मूल्य तय कर रहा है...");
+      setLoadingStage(
+        customPrice
+          ? `आपकी तय कीमत (₹${customPrice}) से कैटलॉग बन रहा है...`
+          : "AI बाज़ार के अनुसार सही मूल्य तय कर रहा है..."
+      );
+
       const geminiKey = import.meta.env.VITE_GEMINI_KEY;
       const categoryName = CATEGORIES[selectedCategory].en;
       const userNote = voiceText || "हस्तशिल्प उत्पाद";
@@ -392,28 +407,29 @@ export default function App() {
 
       if (geminiKey) {
         try {
+          const pricingInstruction = customPrice
+            ? `CRITICAL PRICING: The artisan has manually fixed the selling price at exactly INR ${customPrice}. You MUST output "suggested_price": ${customPrice}.`
+            : `Set a fair, competitive market price: Pottery: ₹149 - ₹249, Paintings: ₹249 - ₹399.`;
+
           const promptText = `
 You are an expert Indian Handicrafts catalog specialist for Kalakriti on ONDC.
 Carefully inspect the attached photo. User note: "${userNote}". Category: "${categoryName}".
 
-CRITICAL INSTRUCTIONS:
-1. IDENTIFY WHAT IS ACTUALLY IN THE PHOTO:
-   - If it's a painting / wall art: describe it as a painting (Madhubani, Mithila, Warli, etc.).
-   - If it's pottery / terracotta: describe it as a clay pot / handi.
-   - If puppets / toys: describe as Katputli / wooden craft.
-2. PRICING:
-   - Painting: ₹249 to ₹399
-   - Pottery / Clay: ₹149 to ₹249
-   - Puppets / Dolls: ₹299 to ₹449
+${pricingInstruction}
+
+RULES:
+1. IDENTIFY THE EXACT ITEM FROM PHOTO (Clay pot, Handi, Painting, Puppets, etc.).
+2. ACCURATE REGION & ARTISAN: Matching the craft origin.
+3. CONCISE SPECIFICATIONS: Material, size, usage.
 
 Output ONLY valid JSON matching this schema:
 {
   "title_hi": "सटीक हिंदी नाम",
   "title_en": "Accurate English name",
-  "suggested_price": 299,
+  "suggested_price": ${customPrice || 199},
   "artisan_name": "कारीगर का नाम",
   "artisan_region": "क्षेत्र व राज्य",
-  "quick_summary_hi": "फोटो में दिख रहे सामान का 1-2 लाइन में विवरण।",
+  "quick_summary_hi": "फोटो में दिख रहे सामान का विवरण।",
   "quick_summary_en": "1-2 lines description matching the photo.",
   "specs_hi": [
     { "label": "कला / शिल्प", "value": "शिल्प का प्रकार" },
@@ -465,27 +481,36 @@ Output ONLY valid JSON matching this schema:
         }
       }
 
+      // Dynamic Fallback if offline
       if (!generatedData) {
+        const isPainting = /painting|मधुबनी|चित्र|paint|art|चित्रकारी/i.test(userNote + categoryName);
+        const autoPrice = isPainting ? 299 : 180;
+        const finalPrice = customPrice ? Number(customPrice) : autoPrice;
+
         generatedData = {
-          title_hi: "पारंपरिक हस्तनिर्मित लोककला उत्पाद",
-          title_en: "Handmade Traditional Craft",
-          suggested_price: 299,
-          artisan_name: "माधुरी देवी",
-          artisan_region: "राजस्थान",
+          title_hi: isPainting ? "पारंपरिक मधुबनी लोककला पेंटिंग" : "हस्तनिर्मित पारंपरिक मिट्टी की हांडी",
+          title_en: isPainting ? "Handmade Madhubani Folk Painting" : "Traditional Handcrafted Clay Pot",
+          suggested_price: finalPrice,
+          artisan_name: isPainting ? "माधुरी देवी" : "रमेश प्रजापति",
+          artisan_region: isPainting ? "मिथिला, बिहार" : "अलवर, राजस्थान",
           quick_summary_hi: "कुशल कारीगरों द्वारा हस्तनिर्मित प्रामाणिक उत्पाद।",
           quick_summary_en: "Authentic handcrafted craft directly from rural artisan.",
           specs_hi: [
-            { label: "कला / शिल्प", value: categoryName },
-            { label: "सामग्री", value: "प्राकृतिक सामग्री" },
-            { label: "उपयोग", value: "सजावट एवं उपहार" }
+            { label: "कला / शिल्प", value: isPainting ? "मधुबनी लोककला" : "पारंपरिक कुम्हारी" },
+            { label: "सामग्री", value: isPainting ? "हैंडमेड पेपर एवं प्राकृतिक रंग" : "100% प्राकृतिक मिट्टी" },
+            { label: "उपयोग", value: "गृह सज्जा और उपहार" }
           ],
           specs_en: [
-            { label: "Craft", value: categoryName },
-            { label: "Material", value: "Natural Material" },
+            { label: "Craft Form", value: isPainting ? "Madhubani Art" : "Pottery" },
+            { label: "Material", value: isPainting ? "Handmade Paper" : "Natural Clay" },
             { label: "Best For", value: "Decor & Gifting" }
           ],
           tags: ["Handmade", "ONDC Ready"]
         };
+      }
+
+      if (customPrice) {
+        generatedData.suggested_price = Number(customPrice);
       }
 
       const finalPayload: CatalogData = {
@@ -762,7 +787,7 @@ Output ONLY valid JSON matching this schema:
           <button
             type="button"
             disabled={isLoading}
-            onClick={handleGenerateCatalog}
+            onClick={handleOpenPriceModal}
             className="w-full flex items-center justify-center gap-2.5 rounded-2xl py-4 font-bold text-base text-white shadow-lg transition-all active:scale-[0.98] disabled:opacity-60"
             style={{
               background: "linear-gradient(135deg, #8B4513 0%, #6B3A2A 100%)",
@@ -784,6 +809,123 @@ Output ONLY valid JSON matching this schema:
             ✨ AI फोटो देखकर सही दाम और विवरण खुद लिख देगा
           </p>
         </div>
+        {/* ── 🏷️ INTERACTIVE PRICING POPUP MODAL (Step 4) ── */}
+        {showPriceModal && (
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-end justify-center z-50 animate-fade-in">
+            <div
+              className="bg-[#FFFDF9] w-full rounded-t-3xl p-5 space-y-4 max-h-[90%] overflow-y-auto border-t-2 border-[#C4886B] shadow-2xl animate-slide-up"
+              style={{ fontFamily: "'Poppins', sans-serif" }}
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between border-b border-[#EAC9B0] pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center text-base">
+                    🏷️
+                  </div>
+                  <div>
+                    <h3
+                      className="text-base font-bold text-[#3D1F0F]"
+                      style={{ fontFamily: "'Noto Serif', serif" }}
+                    >
+                      कीमत कैसे तय करना चाहते हैं?
+                    </h3>
+                    <p className="text-[11px] text-[#8B4513]">
+                      अपनी मर्ज़ी से कीमत डालें या AI को तय करने दें
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPriceModal(false)}
+                  className="w-7 h-7 rounded-full bg-stone-100 text-stone-600 font-bold flex items-center justify-center active:scale-90"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* ── OPTION 1: AI Auto-Pricing ── */}
+              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[#6B3A2A] flex items-center gap-1.5">
+                    <span>✨</span>
+                    <span>विकल्प 1: AI बाज़ार भाव (अनुशंसित)</span>
+                  </span>
+                  <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full">
+                    ONDC Ready
+                  </span>
+                </div>
+                <p className="text-[11px] text-stone-600 leading-relaxed">
+                  AI फोटो और कला की बारीकी देखकर सबसे सही प्रतिस्पर्धी दाम (उदा. ₹150 से ₹299) खुद तय करेगा।
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleGenerateCatalog(null)}
+                  className="w-full py-2.5 rounded-xl font-bold text-xs text-white shadow-xs active:scale-98 transition flex items-center justify-center gap-1.5"
+                  style={{ background: "linear-gradient(135deg, #8B4513 0%, #6B3A2A 100%)" }}
+                >
+                  <span>✨</span>
+                  <span>AI को कीमत तय करने दें</span>
+                </button>
+              </div>
+
+              {/* ── Divider ── */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-stone-200" />
+                <span className="text-[11px] font-bold text-[#9C6644] px-2 py-0.5 rounded-full bg-stone-100">
+                  या अपनी खुद की कीमत डालें
+                </span>
+                <div className="flex-1 h-px bg-stone-200" />
+              </div>
+
+              {/* ── OPTION 2: Manual Custom Price Input ── */}
+              <div className="p-3.5 rounded-2xl bg-white border border-[#E0C8B5] space-y-3 shadow-xs">
+                <div>
+                  <label className="block text-xs font-bold text-[#3D1F0F] mb-1">
+                    विकल्प 2: अपनी बिक्री कीमत (Your Price in ₹)
+                  </label>
+                  <div className="flex items-center rounded-xl overflow-hidden border-2 border-[#C4886B] bg-[#FFFBF7] px-3 py-1">
+                    <span className="text-lg font-bold text-[#6B3A2A] mr-1">₹</span>
+                    <input
+                      type="number"
+                      placeholder="उदा. 250"
+                      value={manualPriceInput}
+                      onChange={(e) => setManualPriceInput(e.target.value)}
+                      className="w-full py-1 text-base font-extrabold text-[#3D1F0F] outline-none bg-transparent"
+                    />
+                  </div>
+                </div>
+
+                {/* Quick Suggestions */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-stone-500 font-medium">सुझाव:</span>
+                  {[150, 200, 250, 350].map((quickAmt) => (
+                    <button
+                      key={quickAmt}
+                      type="button"
+                      onClick={() => setManualPriceInput(String(quickAmt))}
+                      className="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-[#6B3A2A] border border-stone-200"
+                    >
+                      ₹{quickAmt}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  disabled={!manualPriceInput || Number(manualPriceInput) <= 0}
+                  onClick={() => handleGenerateCatalog(Number(manualPriceInput))}
+                  className="w-full py-2.5 rounded-xl font-bold text-xs text-white shadow-xs active:scale-98 transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  style={{ background: "#15803D" }}
+                >
+                  <span>✓</span>
+                  <span>
+                    {manualPriceInput ? `₹${manualPriceInput} की कीमत से जोड़ें` : "कीमत दर्ज करें"}
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
