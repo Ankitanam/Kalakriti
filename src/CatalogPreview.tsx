@@ -1,345 +1,403 @@
 // src/CatalogPreview.tsx
-import { useState } from "react";
+import React, { useState } from "react";
 
 export interface CatalogData {
-    imageUrl?: string;
-    title_hi?: string;
-    title_en?: string;
-    description_hi?: string;
-    description_en?: string;
-    quick_summary_hi?: string;
-    quick_summary_en?: string;
-    specs_hi?: Array<{ label: string; value: string }>;
-    specs_en?: Array<{ label: string; value: string }>;
-    suggested_price?: number;
-    quantity?: number;
-    artisan_name?: string;
-    artisan_region?: string;
-    tags?: string[];
+  title_hi: string;
+  title_en: string;
+  suggested_price: number;
+  imageUrl?: string;
+  artisan_name?: string;
+  artisan_region?: string;
+  quick_summary_hi?: string;
+  quick_summary_en?: string;
+  story_hi?: string;
+  story_en?: string;
+  highlights_hi?: string[];
+  highlights_en?: string[];
+  specs_hi?: Array<{ label: string; value: string }>;
+  specs_en?: Array<{ label: string; value: string }>;
+  tags?: string[];
 }
 
-interface CatalogPreviewProps {
-    data?: CatalogData | null;
-    onBack?: () => void;
-    onCheckout?: () => void;
+export interface CatalogPreviewProps {
+  data: CatalogData;
+  onBack: () => void;
+  onCheckout: () => void;
+  onEdit?: () => void;
 }
 
-export default function CatalogPreview({ data, onBack, onCheckout }: CatalogPreviewProps) {
-    const [activeTab, setActiveTab] = useState<"hindi" | "english">("hindi");
-    const [published, setPublished] = useState(false);
+export default function CatalogPreview({
+  data,
+  onBack,
+  onCheckout,
+  onEdit,
+}: CatalogPreviewProps) {
+  const [activeTab, setActiveTab] = useState<"hi" | "en">("hi");
 
-    const titleHi = data?.title_hi || "हस्तनिर्मित पारंपरिक उत्पाद";
-    const titleEn = data?.title_en || "Handcrafted Traditional Product";
-    const price = data?.suggested_price || 199;
-    const originalPrice = Math.round(price * 1.6);
-    const artisanName = data?.artisan_name || "माधुरी देवी";
-    const artisanRegion = data?.artisan_region || "कारीगर क्लस्टर, भारत";
-    const imageUrl = data?.imageUrl || "https://images.unsplash.com/photo-1604264726154-26480e76f4e1?w=500";
+  const defaultStoryHi =
+    data.story_hi ||
+    `यह हस्तशिल्प भारत की प्राचीन लोक परंपरा और कारीगरी का प्रतीक है। इसे कुशल ग्रामीण कारीगरों द्वारा स्थानीय पर्यावरण-अनुकूल सामग्री और पारंपरिक तकनीकों से तैयार किया गया है, जो घर में सकारात्मक ऊर्जा और सांस्कृतिक सौंदर्य का संचार करता है।`;
 
-    const tags = data?.tags && data.tags.length > 0
-        ? data.tags
-        : ["हस्तशिल्प", "Handmade", "ONDC Direct", "Kalakriti"];
+  const defaultStoryEn =
+    data.story_en ||
+    `This authentic artisan craft represents centuries of Indian generational heritage. Meticulously shaped and detailed using sustainable, locally sourced materials, it brings timeless cultural aesthetics and soulful elegance to modern living spaces.`;
 
-    // Dynamic Summary & Description based on AI output
-    const summaryHi = data?.quick_summary_hi || data?.description_hi || "कुशल कारीगरों द्वारा पारंपरिक कला से तैयार किया गया प्रामाणिक उत्पाद।";
-    const summaryEn = data?.quick_summary_en || data?.description_en || "Authentic handcrafted piece made with care using heritage methods.";
+  const defaultHighlightsHi =
+    data.highlights_hi && data.highlights_hi.length > 0
+      ? data.highlights_hi
+      : [
+          "100% हस्तनिर्मित एवं पर्यावरण-अनुकूल",
+          "पारंपरिक शिल्पकारों द्वारा प्रामाणिक निर्माण",
+          "गृह सज्जा, पूजा एवं सांस्कृतिक उपहार हेतु उपयुक्त",
+        ];
 
-    return (
+  const defaultHighlightsEn =
+    data.highlights_en && data.highlights_en.length > 0
+      ? data.highlights_en
+      : [
+          "100% Handcrafted from organic, sustainable materials",
+          "Direct from generational rural artisan clusters",
+          "Ideal for aesthetic home decor & mindful gifting",
+        ];
+
+  const isHindi = activeTab === "hi";
+
+  return (
+    <div
+      className="size-full flex items-center justify-center"
+      style={{ background: "#EDE0D4", fontFamily: "'Poppins', sans-serif" }}
+    >
+      {/* Mobile Shell */}
+      <div
+        className="relative flex flex-col overflow-hidden"
+        style={{
+          width: "min(390px, 100vw)",
+          height: "min(844px, 100vh)",
+          background: "#FFFBF7",
+          borderRadius: "clamp(0px, 2vw, 28px)",
+          boxShadow: "0 24px 80px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.08)",
+        }}
+      >
+        {/* Status Bar */}
         <div
-            className="size-full flex items-center justify-center"
-            style={{ background: "#EDE0D4", fontFamily: "'Poppins', sans-serif" }}
+          className="flex items-center justify-between px-6 pt-3 pb-1 flex-shrink-0"
+          style={{ background: "#6B3A2A" }}
         >
-            {/* Phone shell */}
-            <div
-                className="relative flex flex-col overflow-hidden"
-                style={{
-                    width: "min(390px, 100vw)",
-                    height: "min(844px, 100vh)",
-                    background: "#FFFBF7",
-                    borderRadius: "clamp(0px, 2vw, 28px)",
-                    boxShadow: "0 24px 80px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.08)",
-                }}
-            >
-                {/* Status bar */}
-                <div
-                    className="flex items-center justify-between px-6 pt-3 pb-1 flex-shrink-0"
-                    style={{ background: "#6B3A2A" }}
-                >
-                    <span className="text-xs font-medium text-white/90">9:41</span>
-                    <div className="flex items-center gap-2">
-                        <span className="text-xs text-white/80">5G</span>
-                        <div className="w-5 h-2.5 border border-white/60 rounded-sm p-0.5">
-                            <div className="h-full bg-white w-4/5 rounded-xs" />
-                        </div>
-                    </div>
-                </div>
-
-                {/* Top App Bar */}
-                <div
-                    className="flex items-center px-4 py-3 gap-3 flex-shrink-0"
-                    style={{ background: "#6B3A2A" }}
-                >
-                    <button
-                        type="button"
-                        className="w-10 h-10 rounded-full flex items-center justify-center transition active:scale-95 text-white"
-                        style={{ background: "rgba(255,255,255,0.12)" }}
-                        onClick={onBack}
-                    >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                            <path d="M15 18l-6-6 6-6" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                    </button>
-                    <div className="flex-1">
-                        <h1
-                            className="text-lg font-bold text-white tracking-wide"
-                            style={{ fontFamily: "'Noto Serif', serif" }}
-                        >
-                            Preview Listing
-                        </h1>
-                        <p className="text-xs text-white/60 -mt-0.5">Kalakriti AI Catalog</p>
-                    </div>
-                </div>
-
-                {/* Scrollable content */}
-                <div
-                    className="flex-1 overflow-y-auto"
-                    style={{ scrollbarWidth: "none", paddingBottom: 110 }}
-                >
-                    {/* Product Image */}
-                    <div
-                        className="mx-4 mt-4 rounded-3xl overflow-hidden relative shadow-sm"
-                        style={{ height: 260, background: "#F0EBE3" }}
-                    >
-                        <img
-                            src={imageUrl}
-                            alt={titleEn}
-                            className="w-full h-full object-cover"
-                        />
-                        <div
-                            className="absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
-                            style={{ background: "rgba(255,255,255,0.92)", color: "#6B3A2A" }}
-                        >
-                            ★ AI Enhanced
-                        </div>
-                    </div>
-
-                    {/* Product Details Card */}
-                    <div className="mx-4 mt-4 space-y-3">
-                        {/* ONDC Badges */}
-                        <div className="flex items-center gap-2">
-                            <span
-                                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold tracking-wide"
-                                style={{ background: "rgba(124,58,237,0.1)", color: "#7C3AED", border: "1.5px solid rgba(124,58,237,0.25)" }}
-                            >
-                                ✨ ONDC Ready
-                            </span>
-                            <span
-                                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold"
-                                style={{ background: "rgba(22,163,74,0.1)", color: "#16A34A", border: "1.5px solid rgba(22,163,74,0.25)" }}
-                            >
-                                ● Live Preview
-                            </span>
-                        </div>
-
-                        {/* Title block */}
-                        <div>
-                            <h2
-                                className="text-2xl font-bold leading-tight"
-                                style={{ color: "#3D1F0F", fontFamily: "'Noto Serif', serif" }}
-                            >
-                                {titleHi}
-                            </h2>
-                            <p className="text-sm font-medium mt-0.5" style={{ color: "#9C6644" }}>
-                                {titleEn}
-                            </p>
-                        </div>
-
-                        {/* Seller info */}
-                        <div className="flex items-center gap-2">
-                            <div
-                                className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white"
-                                style={{ background: "#6B3A2A" }}
-                            >
-                                {artisanName.charAt(0)}
-                            </div>
-                            <span className="text-xs font-medium" style={{ color: "#9C6644" }}>
-                                {artisanName} · {artisanRegion}
-                            </span>
-                            <div className="flex items-center gap-0.5 ml-auto">
-                                <span className="text-amber-500 text-xs">★★★★☆</span>
-                                <span className="text-xs ml-1 text-[#9C6644]">4.0</span>
-                            </div>
-                        </div>
-
-                        <div style={{ height: 1, background: "rgba(196,136,107,0.2)" }} />
-
-                        {/* Pricing */}
-                        <div
-                            className="rounded-2xl p-4 flex items-center justify-between"
-                            style={{ background: "linear-gradient(135deg, #FFF8F3 0%, #FEF0E4 100%)", border: "1.5px solid rgba(196,136,107,0.2)" }}
-                        >
-                            <div>
-                                <div className="flex items-baseline gap-2">
-                                    <span
-                                        className="text-3xl font-bold"
-                                        style={{ color: "#3D1F0F", fontFamily: "'Noto Serif', serif" }}
-                                    >
-                                        ₹{price}
-                                    </span>
-                                    <span
-                                        className="text-base font-medium line-through text-stone-400"
-                                    >
-                                        ₹{originalPrice}
-                                    </span>
-                                </div>
-                                <p className="text-xs mt-0.5 text-stone-500">
-                                    Incl. of all taxes · Free delivery
-                                </p>
-                            </div>
-                            <div
-                                className="flex flex-col items-center justify-center rounded-2xl px-4 py-2 text-center bg-emerald-50 border border-emerald-200"
-                            >
-                                <span className="text-base font-bold text-emerald-700">40% बचत</span>
-                                <span className="text-[10px] font-medium text-emerald-800">कारीगर को सीधा लाभ</span>
-                            </div>
-                        </div>
-
-                        {/* ── Dynamic Tabs & Specifications (NO Hardcoded Pot text!) ── */}
-                        <div>
-                            <div className="flex rounded-xl overflow-hidden mb-3" style={{ background: "rgba(196,136,107,0.1)", padding: 3 }}>
-                                <button
-                                    type="button"
-                                    onClick={() => setActiveTab("hindi")}
-                                    className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all duration-200"
-                                    style={{
-                                        background: activeTab === "hindi" ? "#6B3A2A" : "transparent",
-                                        color: activeTab === "hindi" ? "white" : "#9C6644",
-                                    }}
-                                >
-                                    हिंदी विवरण
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setActiveTab("english")}
-                                    className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all duration-200"
-                                    style={{
-                                        background: activeTab === "english" ? "#6B3A2A" : "transparent",
-                                        color: activeTab === "english" ? "white" : "#9C6644",
-                                    }}
-                                >
-                                    English Copy
-                                </button>
-                            </div>
-
-                            {/* Dynamic AI Summary paragraph */}
-                            <div className="p-3.5 rounded-2xl mb-3 bg-[#FFFBF7] border border-[#F3E2D5]">
-                                <p className="text-xs text-[#5A2E12] leading-relaxed font-medium">
-                                    {activeTab === "hindi" ? summaryHi : summaryEn}
-                                </p>
-                            </div>
-
-                            {/* ── Tabular Specifications ── */}
-                            <div 
-                                className="rounded-2xl overflow-hidden shadow-xs border" 
-                                style={{ borderColor: "rgba(196,136,107,0.25)", background: "#FFFBF7" }}
-                            >
-                                <div className="px-3.5 py-2.5 border-b flex items-center justify-between bg-[#F8EDE5]" style={{ borderColor: "rgba(196,136,107,0.2)" }}>
-                                    <span className="text-[11px] font-bold uppercase tracking-wider text-[#6B3A2A]">
-                                        {activeTab === "hindi" ? "📋 उत्पाद विवरण (SPECS)" : "📋 Product Details"}
-                                    </span>
-                                    <span className="text-[10px] text-emerald-800 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-300">
-                                        ONDC सत्यापित
-                                    </span>
-                                </div>
-
-                                <div className="divide-y text-xs" style={{ borderColor: "rgba(196,136,107,0.15)" }}>
-                                    {(activeTab === "hindi" 
-                                        ? (data?.specs_hi || [
-                                            { label: "कला / शिल्प", value: titleHi },
-                                            { label: "सामग्री", value: "प्राकृतिक हस्तशिल्प सामग्री" },
-                                            { label: "उपयोग", value: "सजावट एवं उपहार" }
-                                        ])
-                                        : (data?.specs_en || [
-                                            { label: "Craft Form", value: titleEn },
-                                            { label: "Material", value: "Natural Artisanal Material" },
-                                            { label: "Best For", value: "Home Decor & Gifting" }
-                                        ])
-                                    ).map((spec: { label: string; value: string }, idx: number) => (
-                                        <div 
-                                            key={idx} 
-                                            className="grid grid-cols-12 px-3.5 py-2.5 items-center"
-                                            style={{ background: idx % 2 === 0 ? "#FFFFFF" : "#FFFBF7" }}
-                                        >
-                                            <span className="col-span-4 font-semibold text-[#8B4513] text-[11px]">
-                                                {spec.label}
-                                            </span>
-                                            <span className="col-span-8 text-[#3D1F0F] font-medium leading-snug">
-                                                {spec.value}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* AI-Generated Tags */}
-                        <div>
-                            <p className="text-xs font-semibold uppercase tracking-widest mb-2 mt-4 text-[#9C6644]">
-                                AI-Generated Tags
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                                {tags.map((tag: string) => (
-                                    <span
-                                        key={tag}
-                                        className="px-3 py-1 rounded-full text-xs font-medium bg-[#F5EDE6] text-[#6B3A2A] border border-[#E0CCBE]"
-                                    >
-                                        #{tag}
-                                    </span>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Sticky Bottom Bar */}
-                <div
-                    className="absolute bottom-0 left-0 right-0 flex-shrink-0 px-4 pt-3 pb-7"
-                    style={{
-                        background: "linear-gradient(to top, #FFFBF7 75%, transparent)",
-                    }}
-                >
-                    {published ? (
-                        <div
-                            className="w-full flex items-center justify-center gap-2 rounded-2xl py-4 text-base font-bold bg-emerald-100 text-emerald-800 border border-emerald-300"
-                        >
-                            ✓ ONDC नेटवर्क पर प्रकाशित!
-                        </div>
-                    ) : (
-                        <div className="flex gap-3">
-                            <button
-                                type="button"
-                                onClick={onBack}
-                                className="w-28 py-3.5 rounded-2xl font-bold text-sm border-2 border-[#6B3A2A] text-[#6B3A2A] active:scale-95 transition"
-                            >
-                                Edit
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setPublished(true);
-                                    setTimeout(() => onCheckout?.(), 600);
-                                }}
-                                className="flex-1 flex items-center justify-center gap-2 rounded-2xl py-3.5 font-bold text-sm text-white shadow-lg active:scale-[0.98] transition"
-                                style={{
-                                    background: "linear-gradient(135deg, #8B4513 0%, #6B3A2A 100%)",
-                                }}
-                            >
-                                🚀 Approve &amp; Publish
-                            </button>
-                        </div>
-                    )}
-                </div>
+          <span className="text-xs font-medium text-white/90">9:41</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-white/80">5G</span>
+            <div className="w-5 h-2.5 border border-white/60 rounded-sm p-0.5">
+              <div className="h-full bg-white w-4/5 rounded-xs" />
             </div>
+          </div>
         </div>
-    );
+
+        {/* Top App Bar */}
+        <div
+          className="flex items-center px-4 py-3 gap-3 flex-shrink-0"
+          style={{ background: "#6B3A2A" }}
+        >
+          <button
+            type="button"
+            onClick={onBack}
+            className="w-10 h-10 rounded-full flex items-center justify-center text-white active:scale-95 transition cursor-pointer"
+            style={{ background: "rgba(255,255,255,0.12)" }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M15 18l-6-6 6-6"
+                stroke="white"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+          <div className="flex-1">
+            <h1
+              className="text-xl font-bold text-white tracking-wide"
+              style={{ fontFamily: "'Noto Serif', serif" }}
+            >
+              Preview Listing
+            </h1>
+            <p className="text-xs text-white/70 -mt-0.5">Kalakriti AI Catalog</p>
+          </div>
+        </div>
+
+        {/* Scrollable Content Body */}
+        <div
+          className="flex-1 overflow-y-auto px-5 py-4 space-y-4"
+          style={{ scrollbarWidth: "none", paddingBottom: 110 }}
+        >
+          {/* ========================================================================= */}
+          {/* 📸 1. मुख्य अपलोड की गई फोटो (HERO PRODUCT IMAGE)                        */}
+          {/* ========================================================================= */}
+          <div className="relative w-full h-64 rounded-3xl overflow-hidden shadow-md bg-stone-100 border border-[#C4886B]/30 flex-shrink-0">
+            <img
+              src={data.imageUrl || "https://images.unsplash.com/photo-1604264726154-26480e76f4e1?w=500"}
+              alt={data.title_en || "Product Preview"}
+              className="w-full h-full object-cover"
+            />
+            {/* AI Enhanced Badge */}
+            <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-xs px-3 py-1 rounded-full text-[11px] font-bold text-[#6B3A2A] shadow-xs flex items-center gap-1.5 border border-[#C4886B]/20">
+              <span>✨</span>
+              <span>AI सुधारी गई फोटो</span>
+            </div>
+            {/* ONDC Certified Badge */}
+            <div className="absolute top-3 right-3 bg-emerald-700 text-white px-2.5 py-1 rounded-full text-[10px] font-bold shadow-xs flex items-center gap-1">
+              <span>✓</span>
+              <span>ONDC Ready</span>
+            </div>
+            {/* Region Tag */}
+            {data.artisan_region && (
+              <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-xs text-white text-xs font-medium px-3 py-1 rounded-full">
+                📍 {data.artisan_region}
+              </div>
+            )}
+          </div>
+
+          {/* 2. Artisan Trust Header */}
+          <div className="flex items-center justify-between py-1 border-b border-[#C4886B]/20">
+            <div className="flex items-center gap-2.5">
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-xs"
+                style={{ background: "#6B3A2A" }}
+              >
+                {data.artisan_name ? data.artisan_name[0] : "क"}
+              </div>
+              <div>
+                <p className="text-xs font-bold text-[#3D1F0F]">
+                  {data.artisan_name || "कुशल कारीगर"} · {data.artisan_region || "भारत"}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1 text-amber-600 text-xs font-semibold">
+              <span>★★★★☆</span>
+              <span className="text-stone-600 text-[11px]">4.0</span>
+            </div>
+          </div>
+
+          {/* 3. Price Card */}
+          <div
+            className="rounded-2xl p-4 flex items-center justify-between shadow-xs border"
+            style={{
+              background: "#FFF",
+              borderColor: "rgba(196,136,107,0.3)",
+            }}
+          >
+            <div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-extrabold text-[#3D1F0F]">
+                  ₹{data.suggested_price}
+                </span>
+                <span className="text-sm text-stone-400 line-through">
+                  ₹{Math.round((Number(data.suggested_price) || 199) * 1.6)}
+                </span>
+              </div>
+              <p className="text-[11px] text-[#8B4513] mt-0.5 font-medium">
+                Incl. of all taxes · Free delivery
+              </p>
+            </div>
+
+            <div className="bg-emerald-50 border border-emerald-200/80 rounded-xl px-3 py-2 text-center">
+              <span className="text-sm font-extrabold text-emerald-800 block leading-tight">
+                40% बचत
+              </span>
+              <span className="text-[10px] text-emerald-700 font-semibold block mt-0.5">
+                कारीगर को सीधा लाभ
+              </span>
+            </div>
+          </div>
+
+          {/* 4. Language Segmented Toggle */}
+          <div
+            className="p-1 rounded-2xl flex gap-1 border"
+            style={{
+              background: "#F5EBE1",
+              borderColor: "rgba(196,136,107,0.25)",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setActiveTab("hi")}
+              className={`flex-1 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
+                activeTab === "hi"
+                  ? "bg-[#6B3A2A] text-white shadow-sm"
+                  : "text-[#8B4513] hover:text-[#6B3A2A]"
+              }`}
+            >
+              हिंदी विवरण
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("en")}
+              className={`flex-1 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
+                activeTab === "en"
+                  ? "bg-[#6B3A2A] text-white shadow-sm"
+                  : "text-[#8B4513] hover:text-[#6B3A2A]"
+              }`}
+            >
+              English Copy
+            </button>
+          </div>
+
+          {/* 5. Quick Headline Hook */}
+          <div
+            className="p-3.5 rounded-2xl border bg-white"
+            style={{ borderColor: "rgba(196,136,107,0.3)" }}
+          >
+            <p
+              className="text-xs font-semibold text-[#3D1F0F] leading-relaxed"
+              style={{ fontFamily: isHindi ? "'Noto Serif', serif" : "'Poppins', sans-serif" }}
+            >
+              {isHindi
+                ? data.quick_summary_hi || "पारंपरिक तकनीकों द्वारा हस्तनिर्मित प्रामाणिक भारतीय शिल्प।"
+                : data.quick_summary_en || "Authentic handmade Indian handicraft crafted using generational techniques."}
+            </p>
+          </div>
+
+          {/* 6. 🏺 विरासत व शिल्प कथा (The Heritage Story) */}
+          <div
+            className="rounded-2xl p-4 border relative overflow-hidden space-y-2 shadow-xs"
+            style={{
+              background: "linear-gradient(135deg, #FFF8F2 0%, #FDF2E7 100%)",
+              borderColor: "#E6C5B0",
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-base">🏺</span>
+              <h4
+                className="text-xs font-bold uppercase tracking-wider text-[#6B3A2A]"
+                style={{ fontFamily: "'Noto Serif', serif" }}
+              >
+                {isHindi ? "विरासत व शिल्प कथा" : "Heritage & Craft Legacy"}
+              </h4>
+            </div>
+
+            <p className="text-xs text-[#522919] leading-relaxed font-normal">
+              {isHindi ? defaultStoryHi : defaultStoryEn}
+            </p>
+          </div>
+
+          {/* 7. ✨ शिल्प की मुख्य विशेषताएं (Key Highlights) */}
+          <div
+            className="rounded-2xl p-4 border bg-white space-y-2.5 shadow-xs"
+            style={{ borderColor: "rgba(196,136,107,0.3)" }}
+          >
+            <h4
+              className="text-xs font-bold uppercase tracking-wider text-[#8B4513] flex items-center gap-1.5"
+              style={{ fontFamily: "'Noto Serif', serif" }}
+            >
+              <span>✨</span>
+              <span>{isHindi ? "मुख्य विशेषताएं" : "Craft Highlights"}</span>
+            </h4>
+
+            <div className="space-y-1.5">
+              {(isHindi ? defaultHighlightsHi : defaultHighlightsEn).map((point, idx) => (
+                <div key={idx} className="flex items-start gap-2 text-xs text-[#3D1F0F]">
+                  <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">
+                    ✓
+                  </span>
+                  <span className="leading-snug">{point}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 8. 📋 विनिर्देश तालिका (Specifications Table) */}
+          <div
+            className="rounded-2xl overflow-hidden border bg-white shadow-xs"
+            style={{ borderColor: "rgba(196,136,107,0.3)" }}
+          >
+            <div className="flex items-center justify-between px-4 py-2.5 bg-[#FAF3EC] border-b border-[#C4886B]/20">
+              <span
+                className="text-xs font-bold text-[#3D1F0F] flex items-center gap-1.5"
+                style={{ fontFamily: "'Noto Serif', serif" }}
+              >
+                <span>📋</span>
+                <span>{isHindi ? "उत्पाद विवरण (SPECS)" : "Product Specifications"}</span>
+              </span>
+              <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/90 px-2 py-0.5 rounded-full border border-emerald-300">
+                ONDC सत्यापित
+              </span>
+            </div>
+
+            <div className="divide-y divide-[#C4886B]/15 text-xs">
+              {(isHindi ? data.specs_hi : data.specs_en)?.map((spec, index) => (
+                <div key={index} className="grid grid-cols-2 px-4 py-2.5">
+                  <span className="font-semibold text-[#8B4513]">{spec.label}</span>
+                  <span className="text-[#3D1F0F] font-medium text-right">{spec.value}</span>
+                </div>
+              )) || (
+                <div className="px-4 py-3 text-center text-xs text-stone-500">
+                  हस्तशिल्प विनिर्देश उपलब्ध हैं।
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 9. AI-Generated Tags */}
+          <div className="space-y-2 pt-1">
+            <p className="text-[10px] font-bold text-[#9C6644] uppercase tracking-wider">
+              AI-GENERATED TAGS
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {data.tags && data.tags.length > 0 ? (
+                data.tags.map((tag, i) => (
+                  <span
+                    key={i}
+                    className="px-2.5 py-1 rounded-full text-xs font-medium border bg-[#FAF5EE] text-[#6B3A2A]"
+                    style={{ borderColor: "rgba(196,136,107,0.35)" }}
+                  >
+                    #{tag.replace(/^#/, "")}
+                  </span>
+                ))
+              ) : (
+                <>
+                  <span className="px-2.5 py-1 rounded-full text-xs font-medium border bg-[#FAF5EE] text-[#6B3A2A] border-[#C4886B]/35">
+                    #Handmade
+                  </span>
+                  <span className="px-2.5 py-1 rounded-full text-xs font-medium border bg-[#FAF5EE] text-[#6B3A2A] border-[#C4886B]/35">
+                    #Kalakriti
+                  </span>
+                  <span className="px-2.5 py-1 rounded-full text-xs font-medium border bg-[#FAF5EE] text-[#6B3A2A] border-[#C4886B]/35">
+                    #ONDC Verified
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Sticky Bottom Actions */}
+        <div
+          className="absolute bottom-0 left-0 right-0 px-5 pb-7 pt-4 flex gap-3 flex-shrink-0"
+          style={{ background: "linear-gradient(to top, #FFFBF7 85%, transparent)" }}
+        >
+          {onEdit && (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="py-3.5 px-5 rounded-2xl font-bold text-xs border text-[#6B3A2A] bg-white active:scale-95 transition cursor-pointer shadow-xs"
+              style={{ borderColor: "rgba(196,136,107,0.5)" }}
+            >
+              Edit
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onCheckout}
+            className="flex-1 py-3.5 px-4 rounded-2xl font-bold text-xs text-white shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+            style={{
+              background: "linear-gradient(135deg, #8B4513 0%, #6B3A2A 100%)",
+              boxShadow: "0 8px 24px rgba(107,58,42,0.3)",
+            }}
+          >
+            <span>🚀</span>
+            <span>Approve & Publish</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }

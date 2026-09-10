@@ -1,7 +1,6 @@
 // src/OndcBuyerScreen.tsx
 import React, { useState, useEffect } from "react";
 import { StoreItem } from "./App";
-import { transformToOndcCatalog } from "./utils/becknSchema";
 import {
   CartItem,
   executeBecknSelect,
@@ -14,22 +13,62 @@ import { searchProductsFuzzy } from "./utils/fuzzySearch";
 
 interface OndcBuyerScreenProps {
   inventory: StoreItem[];
-  onOrderConfirmed?: (order: any, cart: any) => void; // 👈 accepts order and cart
+  onOrderConfirmed?: (order: any, cart: any) => void;
   onLogout: () => void;
 }
 
 export default function OndcBuyerScreen({
   inventory,
-  onOrderConfirmed, // 👈 received here
+  onOrderConfirmed,
   onLogout,
 }: OndcBuyerScreenProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<StoreItem | null>(null);
   const [selectedQty, setSelectedQty] = useState(1);
-  const [showBecknModal, setShowBecknModal] = useState<StoreItem | null>(null);
   const [buyerPlatform, setBuyerPlatform] = useState<"PhonePe Pincode" | "Paytm ONDC">("PhonePe Pincode");
 
-  // ── Step 3: Cart State (Beckn Select) ──
+  // 🔍 फुल प्रोडक्ट विवरण स्क्रीन के लिए स्टेट
+  const [viewingDetailsProduct, setViewingDetailsProduct] = useState<StoreItem | null>(null);
+  const [detailsSpecsLang, setDetailsSpecsLang] = useState<"hi" | "en">("hi");
+
+  // 🔄 लाइव इन्वेंट्री स्टेट (सेलर डैशबोर्ड से ऑटोमैटिक सिंक)
+  const [liveInventory, setLiveInventory] = useState<StoreItem[]>(() => {
+    try {
+      const saved = localStorage.getItem("kalakriti_inventory");
+      return saved ? JSON.parse(saved) : inventory;
+    } catch {
+      return inventory;
+    }
+  });
+
+  // सेलर जब भी स्टॉक बदले, बायर पेज पर रीयल-टाइम ऑटो सिंक
+  useEffect(() => {
+    const handleSync = () => {
+      try {
+        const saved = localStorage.getItem("kalakriti_inventory");
+        if (saved) {
+          setLiveInventory(JSON.parse(saved));
+        }
+      } catch (e) {
+        console.warn("इन्वेंट्री सिंक एरर:", e);
+      }
+    };
+
+    window.addEventListener("storage", handleSync);
+    window.addEventListener("focus", handleSync);
+    return () => {
+      window.removeEventListener("storage", handleSync);
+      window.removeEventListener("focus", handleSync);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (inventory && inventory.length > 0) {
+      setLiveInventory(inventory);
+    }
+  }, [inventory]);
+
+  // ── Cart State ──
   const [cart, setCart] = useState<CartItem[]>(() => {
     try {
       const saved = localStorage.getItem("kalakriti_cart");
@@ -43,7 +82,7 @@ export default function OndcBuyerScreen({
   const [checkoutStage, setCheckoutStage] = useState<"closed" | "cart" | "address" | "success">("closed");
   const [confirmedOrderDetails, setConfirmedOrderDetails] = useState<ConfirmedOrder | null>(null);
 
-  // ── Step 4: Delivery Address State (Beckn Init - Persisted in LocalStorage) ──
+  // ── Delivery Address State ──
   const [address, setAddress] = useState<DeliveryAddress>(() => {
     try {
       const saved = localStorage.getItem("kalakriti_buyer_address");
@@ -69,36 +108,50 @@ export default function OndcBuyerScreen({
     }
   });
 
-  // Courier Provider Selection (India Post vs Delhivery)
   const [selectedCourier, setSelectedCourier] = useState<"India Post (डाक घर)" | "Delhivery">("India Post (डाक घर)");
 
-  // ── Step 2 Integration: Fuzzy Search ──
-  const filteredProducts = searchProductsFuzzy(inventory, searchQuery);
+  // Live Fuzzy Search
+  const filteredProducts = searchProductsFuzzy(liveInventory, searchQuery);
 
-  // ── Step 3 & 4: Beckn Live Quotes & ETA Calculation ──
   const totalCartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const { quote: cartQuote } = executeBecknSelect(cart);
   const { formattedEta } = executeBecknInit(cart, address);
 
-  // Sync cart with localStorage
   const updateCartAndStorage = (updatedCart: CartItem[]) => {
     setCart(updatedCart);
     localStorage.setItem("kalakriti_cart", JSON.stringify(updatedCart));
   };
 
-  // Add to cart with quantity
+  // सेलर के असली उपलब्ध स्टॉक की सटीक गणना (ई-कॉमर्स लॉजिक)
+  const getProductStockInfo = (productId: string) => {
+    const item = liveInventory.find((it) => it.id === productId);
+    const sellerStock = Math.max(0, Number(item?.quantity ?? 0));
+    const inCartQty = cart.find((c) => c.product.id === productId)?.quantity || 0;
+    const availableToAdd = Math.max(0, sellerStock - inCartQty);
+    return { sellerStock, inCartQty, availableToAdd };
+  };
+
+  // Add to cart with strict stock enforcement
   const handleAddToCart = (product: StoreItem, quantityToAdd: number) => {
+    const { availableToAdd } = getProductStockInfo(product.id);
+
+    if (availableToAdd <= 0) {
+      alert("माफ़ करें! यह सामान विक्रेता के पास स्टॉक में उपलब्ध नहीं है।");
+      return;
+    }
+
+    const finalQty = Math.min(quantityToAdd, availableToAdd);
     const existingIndex = cart.findIndex((c) => c.product.id === product.id);
     let updatedCart: CartItem[];
 
     if (existingIndex > -1) {
       updatedCart = cart.map((item, idx) =>
         idx === existingIndex
-          ? { ...item, quantity: Math.min(item.quantity + quantityToAdd, product.quantity || 10) }
+          ? { ...item, quantity: item.quantity + finalQty }
           : item
       );
     } else {
-      updatedCart = [...cart, { product, quantity: quantityToAdd }];
+      updatedCart = [...cart, { product, quantity: finalQty }];
     }
 
     updateCartAndStorage(updatedCart);
@@ -106,20 +159,26 @@ export default function OndcBuyerScreen({
     setSelectedQty(1);
   };
 
-  // Cart Qty Controls
   const handleIncreaseCartQty = (productId: string) => {
-    const updated = cart.map((item) =>
-      item.product.id === productId
-        ? { ...item, quantity: Math.min(item.quantity + 1, item.product.quantity || 10) }
-        : item
-    );
+    const item = liveInventory.find((it) => it.id === productId);
+    const maxSellerStock = Math.max(0, Number(item?.quantity ?? 0));
+
+    const updated = cart.map((c) => {
+      if (c.product.id === productId) {
+        if (c.quantity >= maxSellerStock) {
+          alert(`विक्रेता के पास केवल ${maxSellerStock} पीस उपलब्ध हैं!`);
+          return c;
+        }
+        return { ...c, quantity: c.quantity + 1 };
+      }
+      return c;
+    });
     updateCartAndStorage(updated);
   };
 
   const handleDecreaseCartQty = (productId: string) => {
     const target = cart.find((item) => item.product.id === productId);
     if (!target) return;
-
     if (target.quantity > 1) {
       const updated = cart.map((item) =>
         item.product.id === productId ? { ...item, quantity: item.quantity - 1 } : item
@@ -131,37 +190,85 @@ export default function OndcBuyerScreen({
     }
   };
 
-  // ── Step 4 & 5: Save Address & Finalize Order (Beckn Confirm) ──
+  // ── Step 4 & 5: Save Address, Deduct Stock & Sync Orders (E-Commerce Logic) ──
   const handleFinalOrderPlacement = () => {
     if (!address.fullName || !address.phone || !address.pincode || !address.street) {
       alert("कृपया पूरा डिलीवरी पता और मोबाइल नंबर भरें!");
       return;
     }
 
-    // Save address for future orders
+    if (cart.length === 0) {
+      alert("आपकी कार्ट खाली है!");
+      return;
+    }
+
     localStorage.setItem("kalakriti_buyer_address", JSON.stringify(address));
 
-    // Execute Beckn Confirm Transaction
+    // 1. ONDC Beckn Transaction Execute
     const orderResult = executeBecknConfirm(cart, address, "UPI (PhonePe / GPay)");
     setConfirmedOrderDetails(orderResult);
-     if (onOrderConfirmed) {
-         onOrderConfirmed(orderResult, cart);
-       }
-   // Empty Cart
-   
-    // Empty Cart
-    updateCartAndStorage([]);
 
-    // Move to Success Stage
+    // 2. सेलर की इन्वेंट्री में से खरीदे गए सभी सामानों का स्टॉक घटाएं
+    const updatedInventory = liveInventory.map((invItem) => {
+      const cartMatch = cart.find((c) => c.product.id === invItem.id);
+      if (cartMatch) {
+        const remainingQty = Math.max(0, (Number(invItem.quantity) || 0) - cartMatch.quantity);
+        return { ...invItem, quantity: remainingQty };
+      }
+      return invItem;
+    });
+
+    setLiveInventory(updatedInventory);
+    localStorage.setItem("kalakriti_inventory", JSON.stringify(updatedInventory));
+
+    // 3. सेलर के आर्डर टैब में नए आर्डर जोड़ें
+    try {
+      const currentOrders = JSON.parse(localStorage.getItem("kalakriti_orders") || "[]");
+      const newArtisanOrders = cart.map((c) => ({
+        orderId: orderResult.orderId,
+        productTitle: c.product.title_hi || "हस्तशिल्प उत्पाद",
+        buyerCity: `${address.city} (${address.state})`,
+        buyerPlatform: buyerPlatform,
+        amount: (Number(c.product.suggested_price) || 199) * c.quantity,
+        courier: selectedCourier,
+        status: "Pending",
+        orderDate: "अभी-अभी (Just now)",
+      }));
+
+      const mergedOrders = [...newArtisanOrders, ...currentOrders];
+      localStorage.setItem("kalakriti_orders", JSON.stringify(mergedOrders));
+    } catch (err) {
+      console.warn("आर्डर सिंक करने में त्रुटि:", err);
+    }
+
+    // 4. बायर को ऑर्डर रिसीट भेजें
+    if (onOrderConfirmed) {
+      onOrderConfirmed(orderResult, cart);
+    }
+
+    // 5. स्टोरेज इवेंट ट्रिगर करें ताकि सेलर डैशबोर्ड तुरंत रीयल-टाइम अपडेट हो जाए
+    window.dispatchEvent(new Event("storage"));
+
+    // कार्ट खाली करें
+    updateCartAndStorage([]);
     setCheckoutStage("success");
   };
+
+  const openAddToCartModal = (item: StoreItem) => {
+    const { availableToAdd } = getProductStockInfo(item.id);
+    setSelectedProduct(item);
+    setSelectedQty(availableToAdd > 0 ? 1 : 0);
+  };
+
+  const activeStockInfo = selectedProduct
+    ? getProductStockInfo(selectedProduct.id)
+    : { sellerStock: 0, inCartQty: 0, availableToAdd: 0 };
 
   return (
     <div
       className="size-full flex items-center justify-center"
       style={{ background: "#EDE9FE", fontFamily: "'Poppins', sans-serif" }}
     >
-      {/* Phone Shell styled as Consumer App */}
       <div
         className="relative flex flex-col overflow-hidden bg-slate-50"
         style={{
@@ -182,7 +289,7 @@ export default function OndcBuyerScreen({
           </div>
         </div>
 
-        {/* ── Buyer App Header (PhonePe Pincode / Paytm Style) ── */}
+        {/* ── Buyer App Header ── */}
         <div
           className="p-4 text-white shadow-md flex-shrink-0"
           style={{
@@ -197,7 +304,7 @@ export default function OndcBuyerScreen({
               <button
                 type="button"
                 onClick={onLogout}
-                className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white active:scale-95 transition"
+                className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white active:scale-95 transition cursor-pointer"
                 title="लॉगआउट"
               >
                 ←
@@ -213,15 +320,15 @@ export default function OndcBuyerScreen({
               </div>
             </div>
 
-            {/* Cart Icon with Live Count */}
+            {/* Cart Icon */}
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={() => setCheckoutStage("cart")}
-                className="relative w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white active:scale-95"
+                className="relative w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white active:scale-95 cursor-pointer"
                 title="कार्ट देखें"
               >
-                <span>🛒</span>
+                <span>🛒 </span>
                 {totalCartCount > 0 && (
                   <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center animate-pulse">
                     {totalCartCount}
@@ -235,28 +342,28 @@ export default function OndcBuyerScreen({
                     prev === "PhonePe Pincode" ? "Paytm ONDC" : "PhonePe Pincode"
                   )
                 }
-                className="text-[10px] font-bold bg-white/20 px-2 py-1.5 rounded-lg border border-white/30 active:scale-95"
+                className="text-[10px] font-bold bg-white/20 px-2 py-1.5 rounded-lg border border-white/30 active:scale-95 cursor-pointer"
               >
                 स्विच ⇄
               </button>
             </div>
           </div>
 
-          {/* Search Bar with Fuzzy Search */}
+          {/* Search Bar */}
           <div className="relative mt-2">
             <input
               type="text"
-              placeholder="हस्तशिल्प, पेंटिंग, मिट्टी, wood, mitti खोजें..."
+              placeholder="हस्तशिल्प, पेंटिंग, मिट्टी, wood खोजें..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full py-2.5 pl-9 pr-8 rounded-xl bg-white text-slate-800 text-xs outline-none shadow-inner font-medium"
             />
-            <span className="absolute left-3 top-2.5 text-slate-400 text-xs">🔍</span>
+            <span className="absolute left-3 top-2.5 text-slate-400 text-xs">🔍 </span>
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-2.5 text-slate-400 text-xs font-bold"
+                className="absolute right-3 top-2.5 text-slate-400 text-xs font-bold cursor-pointer"
               >
                 ✕
               </button>
@@ -273,7 +380,7 @@ export default function OndcBuyerScreen({
           <span className="text-[10px] text-purple-700 font-mono">Beckn v1.1 • nic2004:52110</span>
         </div>
 
-        {/* ── Product Feed ── */}
+        {/* ── Product Feed (Real-Time Stock Checked) ── */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3" style={{ scrollbarWidth: "none", paddingBottom: 110 }}>
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
@@ -284,73 +391,94 @@ export default function OndcBuyerScreen({
 
           {filteredProducts.length === 0 ? (
             <div className="text-center py-16 text-slate-400">
-              <p className="text-3xl mb-2">🔍</p>
+              <p className="text-3xl mb-2">🔍 </p>
               <p className="text-sm font-semibold">&apos;{searchQuery}&apos; से मिलता-जुलता कोई सामान नहीं मिला</p>
-              <p className="text-xs mt-1">कृपया कोई अन्य शब्द जैसे &apos;मिट्टी&apos;, &apos;painting&apos;, या &apos;कठपुतली&apos; खोजें।</p>
+              <p className="text-xs mt-1">कृपया कोई अन्य शब्द जैसे &apos;मिट्टी&apos;, &apos;painting&apos; खोजें।</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3">
-              {filteredProducts.map((item) => (
-                <div
-                  key={item.id}
-                  className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-xs flex flex-col justify-between hover:shadow-md transition"
-                >
-                  <div
-                    className="relative h-32 bg-slate-100 cursor-pointer"
-                    onClick={() => {
-                      setSelectedProduct(item);
-                      setSelectedQty(1);
-                    }}
-                  >
-                    <img src={item.imageUrl} alt={item.title_en} className="w-full h-full object-cover" />
-                    <span className="absolute bottom-1.5 left-1.5 bg-black/60 text-white text-[8px] font-bold px-1.5 py-0.5 rounded">
-                      {item.artisan_region || "भारत"}
-                    </span>
-                    <span className="absolute top-1.5 left-1.5 bg-white/90 text-purple-900 text-[8px] font-bold px-1.5 py-0.5 rounded">
-                      स्टॉक: {item.quantity || 1}
-                    </span>
-                  </div>
+              {filteredProducts.map((item) => {
+                const stock = Math.max(0, Number(item.quantity ?? 0));
+                const inCart = cart.find((c) => c.product.id === item.id)?.quantity || 0;
+                const isOutOfStock = stock <= 0;
 
-                  <div className="p-2.5 flex-1 flex flex-col justify-between">
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-900 line-clamp-1">{item.title_hi}</h4>
-                      <p className="text-[10px] text-slate-500 line-clamp-1">{item.title_en}</p>
-                      <div className="flex items-baseline gap-1 mt-1">
-                        <span className="text-xs font-extrabold text-slate-900">₹{item.suggested_price}</span>
-                        <span className="text-[9px] text-emerald-700 bg-emerald-50 px-1 rounded font-bold">
-                          40% बचत
-                        </span>
+                return (
+                  <div
+                    key={item.id}
+                    className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-xs flex flex-col justify-between hover:shadow-md transition"
+                  >
+                    {/* फोटो पर क्लिक करने से फुल डिस्क्रिप्शन खुलेगा */}
+                    <div
+                      className="relative h-36 bg-slate-100 cursor-pointer group overflow-hidden"
+                      onClick={() => setViewingDetailsProduct(item)}
+                    >
+                      <img
+                        src={item.imageUrl}
+                        alt={item.title_en}
+                        className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${
+                          isOutOfStock ? "grayscale opacity-75" : ""
+                        }`}
+                      />
+                      <span className="absolute bottom-1.5 left-1.5 bg-black/60 text-white text-[8px] font-bold px-1.5 py-0.5 rounded">
+                        {item.artisan_region || "भारत"}
+                      </span>
+                      <span
+                        className={`absolute top-1.5 left-1.5 text-[8px] font-bold px-1.5 py-0.5 rounded shadow-xs ${
+                          isOutOfStock
+                            ? "bg-red-600 text-white"
+                            : "bg-white/90 text-purple-900"
+                        }`}
+                      >
+                        {isOutOfStock ? "स्टॉक समाप्त" : `स्टॉक: ${stock} पीस`}
+                      </span>
+                    </div>
+
+                    {/* नाम व दाम */}
+                    <div
+                      className="p-2.5 flex-1 flex flex-col justify-between cursor-pointer"
+                      onClick={() => setViewingDetailsProduct(item)}
+                    >
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900 line-clamp-1">{item.title_hi}</h4>
+                        <p className="text-[10px] text-slate-500 line-clamp-1 mt-0.5">{item.title_en}</p>
+                        <div className="flex items-baseline gap-1 mt-1">
+                          <span className="text-xs font-extrabold text-slate-900">₹{item.suggested_price}</span>
+                          <span className="text-[9px] text-emerald-700 bg-emerald-50 px-1 rounded font-bold">
+                            40% बचत
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* कार्ट में जोड़ें बटन */}
+                      <div className="mt-2 pt-1.5 border-t border-slate-100">
+                        <button
+                          type="button"
+                          disabled={isOutOfStock}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openAddToCartModal(item);
+                          }}
+                          className={`w-full py-2 rounded-xl text-xs font-bold text-white shadow-xs active:scale-95 transition-all flex items-center justify-center gap-1.5 ${
+                            isOutOfStock
+                              ? "bg-slate-400 cursor-not-allowed"
+                              : "cursor-pointer"
+                          }`}
+                          style={{
+                            background: isOutOfStock
+                              ? "#94a3b8"
+                              : buyerPlatform === "PhonePe Pincode"
+                              ? "#5f259f"
+                              : "#00b9f5",
+                          }}
+                        >
+                          <span>🛒 </span>
+                          <span>{isOutOfStock ? "स्टॉक समाप्त" : "कार्ट में जोड़ें"}</span>
+                        </button>
                       </div>
                     </div>
-
-                    <div className="mt-2 space-y-1 pt-1.5 border-t border-slate-100">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedProduct(item);
-                          setSelectedQty(1);
-                        }}
-                        className="w-full py-1.5 rounded-lg text-xs font-bold text-white shadow-xs active:scale-95 transition flex items-center justify-center gap-1"
-                        style={{
-                          background: buyerPlatform === "PhonePe Pincode" ? "#5f259f" : "#00b9f5",
-                        }}
-                      >
-                        <span>🛒</span>
-                        <span>कार्ट में जोड़ें</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setShowBecknModal(item)}
-                        className="w-full py-0.5 text-[9px] font-semibold text-slate-500 hover:text-slate-800 bg-slate-100 rounded text-center"
-                        title="Show Beckn JSON Schema to Judges"
-                      >
-                        🛠️ View Beckn JSON
-                      </button>
-                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -377,7 +505,6 @@ export default function OndcBuyerScreen({
                   <p className="text-[10px] text-white/80">कुल: ₹{cartQuote.totalPrice}</p>
                 </div>
               </div>
-
               <div className="flex items-center gap-1 text-xs font-bold bg-white text-slate-900 px-3 py-1.5 rounded-xl shadow-xs">
                 <span>चेकआउट करें</span>
                 <span>➔</span>
@@ -386,7 +513,224 @@ export default function OndcBuyerScreen({
           </div>
         )}
 
-        {/* ── Product Quick-View Modal (Quantity Selector) ── */}
+        {/* ========================================================================= */}
+        {/* 📜 फुल प्रोडक्ट विवरण स्क्रीन (PRODUCT FULL DETAILS MODAL)                */}
+        {/* ========================================================================= */}
+        {viewingDetailsProduct && (
+          <div className="absolute inset-0 z-50 bg-[#FAF5FF] flex flex-col overflow-hidden animate-in fade-in duration-200">
+            <div
+              className="flex items-center justify-between px-4 py-3.5 flex-shrink-0 text-white shadow-md"
+              style={{
+                background:
+                  buyerPlatform === "PhonePe Pincode"
+                    ? "linear-gradient(135deg, #5f259f 0%, #3b1466 100%)"
+                    : "linear-gradient(135deg, #00b9f5 0%, #0077b6 100%)",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setViewingDetailsProduct(null)}
+                className="w-9 h-9 rounded-full flex items-center justify-center bg-white/20 active:scale-90 transition text-lg cursor-pointer"
+              >
+                ←
+              </button>
+              <h2
+                className="text-base font-bold tracking-wide"
+                style={{ fontFamily: "'Noto Serif', serif" }}
+              >
+                उत्पाद विवरण (Details)
+              </h2>
+              <div className="w-9" />
+            </div>
+
+            <div
+              className="flex-1 overflow-y-auto p-4 space-y-4"
+              style={{ scrollbarWidth: "none", paddingBottom: 110 }}
+            >
+              {/* बड़ी प्रोडक्ट इमेज */}
+              <div className="relative w-full h-64 rounded-3xl overflow-hidden shadow-md bg-white border border-purple-100">
+                <img
+                  src={viewingDetailsProduct.imageUrl}
+                  alt={viewingDetailsProduct.title_en}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute top-3 left-3 bg-white/95 px-2.5 py-1 rounded-full text-xs font-bold text-[#5B21B6] shadow-xs">
+                  ✓ ONDC प्रमाणित
+                </div>
+                <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-xs text-white text-xs font-medium px-3 py-1 rounded-full">
+                  📍 {viewingDetailsProduct.artisan_region || "भारत"}
+                </div>
+              </div>
+
+              {/* टाइटल और मूल्य */}
+              <div className="bg-white rounded-2xl p-4 shadow-xs border border-purple-100 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h3
+                      className="text-lg font-bold text-stone-900 leading-snug"
+                      style={{ fontFamily: "'Noto Serif', serif" }}
+                    >
+                      {viewingDetailsProduct.title_hi}
+                    </h3>
+                    <p className="text-xs text-stone-500 mt-0.5">
+                      {viewingDetailsProduct.title_en}
+                    </p>
+                  </div>
+                  <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg flex-shrink-0">
+                    40% बचत
+                  </span>
+                </div>
+
+                <div className="flex items-baseline gap-2.5 pt-1">
+                  <span className="text-2xl font-extrabold text-[#5B21B6]">
+                    ₹{viewingDetailsProduct.suggested_price}
+                  </span>
+                  <span className="text-sm text-stone-400 line-through">
+                    ₹{Math.round((Number(viewingDetailsProduct.suggested_price) || 199) * 1.4)}
+                  </span>
+                  <span className="text-xs text-stone-500 font-medium ml-auto">
+                    उपलब्ध स्टॉक: {Math.max(0, Number(viewingDetailsProduct.quantity ?? 0))} पीस
+                  </span>
+                </div>
+              </div>
+
+              {/* कारीगर कार्ड */}
+              <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-2xl p-4 border border-purple-200/70 flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-[#5B21B6] text-white flex items-center justify-center text-xl shadow-xs">
+                  🏺
+                </div>
+                <div className="flex-1">
+                  <p className="text-[10px] text-purple-700 font-bold uppercase tracking-wider">
+                    हस्तशिल्प निर्माता
+                  </p>
+                  <h4
+                    className="text-sm font-bold text-stone-900"
+                    style={{ fontFamily: "'Noto Serif', serif" }}
+                  >
+                    {viewingDetailsProduct.artisan_name || "कुशल ग्रामीण कारीगर"}
+                  </h4>
+                  <p className="text-xs text-stone-600">
+                    {viewingDetailsProduct.artisan_region || "पारंपरिक शिल्प क्लस्टर"}
+                  </p>
+                </div>
+              </div>
+
+              {/* विवरण */}
+              <div className="bg-white rounded-2xl p-4 shadow-xs border border-purple-100 space-y-2">
+                <h4
+                  className="text-sm font-bold text-stone-900 flex items-center gap-1.5"
+                  style={{ fontFamily: "'Noto Serif', serif" }}
+                >
+                  <span>📜</span>
+                  <span>सामान की जानकारी (Description)</span>
+                </h4>
+                <p className="text-xs text-stone-700 leading-relaxed">
+                  {viewingDetailsProduct.quick_summary_hi || "पारंपरिक हस्तनिर्मित प्रामाणिक उत्पाद।"}
+                </p>
+                {viewingDetailsProduct.quick_summary_en && (
+                  <p className="text-[11px] text-stone-500 leading-relaxed italic border-t border-stone-100 pt-2">
+                    {viewingDetailsProduct.quick_summary_en}
+                  </p>
+                )}
+              </div>
+
+              {/* विनिर्देश तालिका */}
+              <div className="bg-white rounded-2xl p-4 shadow-xs border border-purple-100 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4
+                    className="text-sm font-bold text-stone-900"
+                    style={{ fontFamily: "'Noto Serif', serif" }}
+                  >
+                    विशेषताएं (Specifications)
+                  </h4>
+                  <div className="flex bg-purple-100/70 p-0.5 rounded-lg text-[10px] font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setDetailsSpecsLang("hi")}
+                      className={`px-2 py-0.5 rounded-md transition cursor-pointer ${
+                        detailsSpecsLang === "hi"
+                          ? "bg-[#5B21B6] text-white shadow-xs"
+                          : "text-purple-800"
+                      }`}
+                    >
+                      हिंदी
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDetailsSpecsLang("en")}
+                      className={`px-2 py-0.5 rounded-md transition cursor-pointer ${
+                        detailsSpecsLang === "en"
+                          ? "bg-[#5B21B6] text-white shadow-xs"
+                          : "text-purple-800"
+                      }`}
+                    >
+                      English
+                    </button>
+                  </div>
+                </div>
+
+                <div className="divide-y divide-purple-50 text-xs">
+                  {(detailsSpecsLang === "hi"
+                    ? viewingDetailsProduct.specs_hi
+                    : viewingDetailsProduct.specs_en
+                  )?.map((spec, i) => (
+                    <div key={i} className="py-2 flex justify-between gap-4">
+                      <span className="text-stone-500 font-medium">{spec.label}</span>
+                      <span className="text-stone-900 font-semibold text-right">
+                        {spec.value}
+                      </span>
+                    </div>
+                  )) || (
+                    <p className="text-xs text-stone-400 py-2">
+                      हस्तशिल्प विवरण उपलब्ध है।
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* बॉटम स्टिकी बार */}
+            <div className="absolute bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-purple-100 flex items-center gap-3 shadow-lg">
+              <div>
+                <p className="text-[10px] text-stone-400 uppercase font-semibold">मूल्य</p>
+                <p className="text-lg font-black text-[#5B21B6]">
+                  ₹{viewingDetailsProduct.suggested_price}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                disabled={Number(viewingDetailsProduct.quantity || 0) <= 0}
+                onClick={() => {
+                  const itemToAdd = viewingDetailsProduct;
+                  setViewingDetailsProduct(null);
+                  openAddToCartModal(itemToAdd);
+                }}
+                className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold text-white shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 ${
+                  Number(viewingDetailsProduct.quantity || 0) <= 0
+                    ? "bg-slate-400 cursor-not-allowed"
+                    : "cursor-pointer"
+                }`}
+                style={{
+                  background:
+                    Number(viewingDetailsProduct.quantity || 0) <= 0
+                      ? "#94a3b8"
+                      : "linear-gradient(135deg, #7C3AED 0%, #5B21B6 100%)",
+                  fontFamily: "'Poppins', sans-serif",
+                }}
+              >
+                <span>🛒</span>
+                <span>
+                  {Number(viewingDetailsProduct.quantity || 0) <= 0
+                    ? "स्टॉक समाप्त (Out of Stock)"
+                    : "कार्ट में जोड़ें (Add to Cart)"}
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── 🛒 Product Quick-View Modal (Quantity Selector - Stock Guard) ── */}
         {selectedProduct && (
           <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-end z-50">
             <div className="bg-white w-full rounded-t-3xl p-5 space-y-3.5 max-h-[85%] overflow-y-auto animate-slide-up">
@@ -408,36 +752,52 @@ export default function OndcBuyerScreen({
                 <button
                   type="button"
                   onClick={() => setSelectedProduct(null)}
-                  className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 font-bold flex items-center justify-center"
+                  className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 font-bold flex items-center justify-center cursor-pointer"
                 >
                   ✕
                 </button>
               </div>
 
-              {/* Quantity Selector */}
+              {/* Quantity Selector Section */}
               <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-200">
                 <div>
                   <p className="text-xs font-bold text-slate-800">खरीदने की मात्रा (Quantity):</p>
-                  <p className="text-[10px] text-slate-500">उपलब्ध स्टॉक: {selectedProduct.quantity || 1} पीस</p>
+                  <p className="text-[10px] text-slate-500">
+                    उपलब्ध स्टॉक: {activeStockInfo.sellerStock} पीस
+                    {activeStockInfo.inCartQty > 0 && ` (${activeStockInfo.inCartQty} पहले से कार्ट में)`}
+                  </p>
                 </div>
 
+                {/* Counter Stepper: कभी भी सेलर के स्टॉक से ऊपर नहीं जाएगा */}
                 <div className="flex items-center gap-2 bg-white px-2 py-1 rounded-xl border border-slate-300 shadow-xs">
                   <button
                     type="button"
+                    disabled={selectedQty <= 1}
                     onClick={() => setSelectedQty((q) => Math.max(1, q - 1))}
-                    className="w-6 h-6 rounded-lg bg-slate-100 text-slate-700 font-bold text-xs flex items-center justify-center active:scale-90"
+                    className={`w-6 h-6 rounded-lg font-bold text-xs flex items-center justify-center transition ${
+                      selectedQty <= 1
+                        ? "bg-slate-100 text-slate-300 cursor-not-allowed"
+                        : "bg-slate-100 text-slate-700 active:scale-90 cursor-pointer"
+                    }`}
                   >
                     −
                   </button>
+
                   <span className="font-extrabold text-sm text-slate-900 min-w-4 text-center">
                     {selectedQty}
                   </span>
+
                   <button
                     type="button"
+                    disabled={selectedQty >= activeStockInfo.availableToAdd}
                     onClick={() =>
-                      setSelectedQty((q) => Math.min(selectedProduct.quantity || 10, q + 1))
+                      setSelectedQty((q) => Math.min(activeStockInfo.availableToAdd, q + 1))
                     }
-                    className="w-6 h-6 rounded-lg bg-purple-700 text-white font-bold text-xs flex items-center justify-center active:scale-90"
+                    className={`w-6 h-6 rounded-lg font-bold text-xs flex items-center justify-center transition ${
+                      selectedQty >= activeStockInfo.availableToAdd
+                        ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                        : "bg-purple-700 text-white active:scale-90 cursor-pointer"
+                    }`}
                   >
                     ＋
                   </button>
@@ -447,122 +807,165 @@ export default function OndcBuyerScreen({
               <div className="flex justify-between items-center text-xs font-semibold text-slate-600 px-1">
                 <span>कुल मूल्य ({selectedQty} पीस):</span>
                 <span className="text-base font-extrabold text-slate-900">
-                  ₹{(selectedProduct.suggested_price || 199) * selectedQty}
+                  ₹{(Number(selectedProduct.suggested_price) || 199) * selectedQty}
                 </span>
               </div>
 
               <button
                 type="button"
+                disabled={activeStockInfo.availableToAdd <= 0}
                 onClick={() => handleAddToCart(selectedProduct, selectedQty)}
-                className="w-full py-3.5 rounded-xl font-bold text-white text-sm shadow-md active:scale-98 transition flex items-center justify-center gap-2"
+                className={`w-full py-3.5 rounded-xl font-bold text-white text-sm shadow-md active:scale-98 transition flex items-center justify-center gap-2 ${
+                  activeStockInfo.availableToAdd <= 0
+                    ? "bg-slate-400 cursor-not-allowed"
+                    : "cursor-pointer"
+                }`}
                 style={{
                   background:
-                    buyerPlatform === "PhonePe Pincode"
+                    activeStockInfo.availableToAdd <= 0
+                      ? "#94a3b8"
+                      : buyerPlatform === "PhonePe Pincode"
                       ? "linear-gradient(135deg, #7C3AED 0%, #5B21B6 100%)"
                       : "linear-gradient(135deg, #0284C7 0%, #0369A1 100%)",
                 }}
               >
-                <span>🛒</span>
-                <span>कार्ट में जोड़ें (Add to Cart)</span>
+                <span>🛒 </span>
+                <span>
+                  {activeStockInfo.availableToAdd <= 0
+                    ? "स्टॉक समाप्त (Out of Stock)"
+                    : "कार्ट में जोड़ें (Add to Cart)"}
+                </span>
               </button>
             </div>
           </div>
         )}
 
-        {/* ── STAGE 1: Cart Modal (Beckn Select) ── */}
+        {/* ── STAGE 1: Cart Modal (Empty Cart Handled - Bug 4 Fixed) ── */}
         {checkoutStage === "cart" && (
           <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-end z-50">
             <div className="bg-white w-full rounded-t-3xl p-5 space-y-3.5 max-h-[88%] overflow-y-auto animate-slide-up">
               <div className="flex justify-between items-center border-b pb-2.5">
                 <div className="flex items-center gap-2">
-                  <span className="text-lg">🛒</span>
+                  <span className="text-lg">🛒 </span>
                   <h3 className="text-sm font-bold text-slate-900">आपकी कार्ट ({totalCartCount} सामान)</h3>
                 </div>
                 <button
                   type="button"
                   onClick={() => setCheckoutStage("closed")}
-                  className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 font-bold flex items-center justify-center"
+                  className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 font-bold flex items-center justify-center cursor-pointer"
                 >
                   ✕
                 </button>
               </div>
 
-              {/* Cart Items List */}
-              <div className="divide-y divide-slate-100 max-h-44 overflow-y-auto">
-                {cart.map((c) => (
-                  <div key={c.product.id} className="py-2.5 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <img
-                        src={c.product.imageUrl}
-                        alt={c.product.title_en}
-                        className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
-                      />
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-slate-800 truncate">{c.product.title_hi}</p>
-                        <p className="text-[10px] text-slate-500">₹{c.product.suggested_price} × {c.quantity}</p>
-                      </div>
-                    </div>
+              {/* जब कार्ट खाली हो (Issue 4 Fixed) */}
+              {cart.length === 0 ? (
+                <div className="py-10 text-center space-y-3">
+                  <div className="w-16 h-16 mx-auto rounded-full bg-purple-50 flex items-center justify-center text-3xl">
+                    🛒
+                  </div>
+                  <h4 className="text-base font-bold text-slate-800">आपकी कार्ट खाली है</h4>
+                  <p className="text-xs text-slate-500 max-w-xs mx-auto">
+                    कृपया कारीगरों द्वारा बनाए गए प्रामाणिक हस्तशिल्प देखें और अपनी कार्ट में जोड़ें।
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setCheckoutStage("closed")}
+                    className="mt-3 px-6 py-2.5 rounded-xl text-xs font-bold text-white shadow-md cursor-pointer"
+                    style={{ background: "linear-gradient(135deg, #7C3AED 0%, #5B21B6 100%)" }}
+                  >
+                    खरीदारी शुरू करें (Start Shopping)
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {/* Cart Items List */}
+                  <div className="divide-y divide-slate-100 max-h-44 overflow-y-auto">
+                    {cart.map((c) => {
+                      const currentStock = Math.max(0, Number(liveInventory.find((it) => it.id === c.product.id)?.quantity ?? 0));
+                      const isMax = c.quantity >= currentStock;
 
-                    {/* Quantity Controller */}
-                    <div className="flex items-center gap-1.5 bg-slate-100 px-1.5 py-0.5 rounded-lg">
-                      <button
-                        type="button"
-                        onClick={() => handleDecreaseCartQty(c.product.id)}
-                        className="w-5 h-5 rounded bg-white font-bold text-xs flex items-center justify-center shadow-2xs"
-                      >
-                        −
-                      </button>
-                      <span className="font-bold text-xs min-w-3 text-center">{c.quantity}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleIncreaseCartQty(c.product.id)}
-                        className="w-5 h-5 rounded bg-purple-700 text-white font-bold text-xs flex items-center justify-center shadow-2xs"
-                      >
-                        ＋
-                      </button>
+                      return (
+                        <div key={c.product.id} className="py-2.5 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <img
+                              src={c.product.imageUrl}
+                              alt={c.product.title_en}
+                              className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
+                            />
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-slate-800 truncate">{c.product.title_hi}</p>
+                              <p className="text-[10px] text-slate-500">₹{c.product.suggested_price} × {c.quantity}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 bg-slate-100 px-1.5 py-0.5 rounded-lg">
+                            <button
+                              type="button"
+                              onClick={() => handleDecreaseCartQty(c.product.id)}
+                              className="w-5 h-5 rounded bg-white font-bold text-xs flex items-center justify-center shadow-2xs cursor-pointer"
+                            >
+                              −
+                            </button>
+                            <span className="font-bold text-xs min-w-3 text-center">{c.quantity}</span>
+                            <button
+                              type="button"
+                              disabled={isMax}
+                              onClick={() => handleIncreaseCartQty(c.product.id)}
+                              className={`w-5 h-5 rounded font-bold text-xs flex items-center justify-center shadow-2xs ${
+                                isMax
+                                  ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                                  : "bg-purple-700 text-white cursor-pointer"
+                              }`}
+                            >
+                              ＋
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Price Quote Breakdown */}
+                  <div className="p-3 bg-purple-50/60 rounded-2xl border border-purple-200 text-xs space-y-1.5">
+                    <div className="flex justify-between text-slate-600">
+                      <span>सामान का कुल मूल्य</span>
+                      <span>₹{cartQuote.itemTotal}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-600">
+                      <span>कूरियर (India Post डाक घर)</span>
+                      <span className={cartQuote.deliveryFee === 0 ? "text-emerald-700 font-bold" : ""}>
+                        {cartQuote.deliveryFee === 0 ? "फ्री (₹499+ प्रोमो)" : `₹${cartQuote.deliveryFee}`}
+                      </span>
+                    </div>
+                    <div className="flex justify-between font-extrabold text-slate-900 text-sm border-t border-purple-200/80 pt-1">
+                      <span>कुल देय राशि</span>
+                      <span>₹{cartQuote.totalPrice}</span>
                     </div>
                   </div>
-                ))}
-              </div>
 
-              {/* Price Quote Breakdown */}
-              <div className="p-3 bg-purple-50/60 rounded-2xl border border-purple-200 text-xs space-y-1.5">
-                <div className="flex justify-between text-slate-600">
-                  <span>सामान का कुल मूल्य</span>
-                  <span>₹{cartQuote.itemTotal}</span>
-                </div>
-                <div className="flex justify-between text-slate-600">
-                  <span>कूरियर (India Post डाक घर)</span>
-                  <span className={cartQuote.deliveryFee === 0 ? "text-emerald-700 font-bold" : ""}>
-                    {cartQuote.deliveryFee === 0 ? "फ्री (₹499+ प्रोमो)" : `₹${cartQuote.deliveryFee}`}
-                  </span>
-                </div>
-                <div className="flex justify-between font-extrabold text-slate-900 text-sm border-t border-purple-200/80 pt-1">
-                  <span>कुल देय राशि</span>
-                  <span>₹{cartQuote.totalPrice}</span>
-                </div>
-              </div>
-
-              {/* Button to Proceed to Step 4 (Address) */}
-              <button
-                type="button"
-                onClick={() => setCheckoutStage("address")} // 👈 Moves directly to Step 4!
-                className="w-full py-3.5 rounded-xl font-bold text-white text-sm shadow-md active:scale-98 transition flex items-center justify-center gap-2"
-                style={{
-                  background:
-                    buyerPlatform === "PhonePe Pincode"
-                      ? "linear-gradient(135deg, #7C3AED 0%, #5B21B6 100%)"
-                      : "linear-gradient(135deg, #0284C7 0%, #0369A1 100%)",
-                }}
-              >
-                <span>📍</span>
-                <span>डिलीवरी पता चुनें और आगे बढ़ें ➔</span>
-              </button>
+                  {/* Proceed to Address Button */}
+                  <button
+                    type="button"
+                    onClick={() => setCheckoutStage("address")}
+                    className="w-full py-3.5 rounded-xl font-bold text-white text-sm shadow-md active:scale-98 transition flex items-center justify-center gap-2 cursor-pointer"
+                    style={{
+                      background:
+                        buyerPlatform === "PhonePe Pincode"
+                          ? "linear-gradient(135deg, #7C3AED 0%, #5B21B6 100%)"
+                          : "linear-gradient(135deg, #0284C7 0%, #0369A1 100%)",
+                    }}
+                  >
+                    <span>📍 </span>
+                    <span>डिलीवरी पता चुनें और आगे बढ़ें ➔</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}
 
-        {/* ── STAGE 2: Step 4 Delivery Address & Logistics (Beckn Init) ── */}
+        {/* ── STAGE 2: Step 4 Delivery Address ── */}
         {checkoutStage === "address" && (
           <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-end z-50">
             <div className="bg-white w-full rounded-t-3xl p-5 space-y-3.5 max-h-[90%] overflow-y-auto animate-slide-up">
@@ -571,7 +974,7 @@ export default function OndcBuyerScreen({
                   <button
                     type="button"
                     onClick={() => setCheckoutStage("cart")}
-                    className="text-xs text-purple-700 font-bold hover:underline"
+                    className="text-xs text-purple-700 font-bold hover:underline cursor-pointer"
                   >
                     ← कार्ट
                   </button>
@@ -581,13 +984,13 @@ export default function OndcBuyerScreen({
                 <button
                   type="button"
                   onClick={() => setCheckoutStage("closed")}
-                  className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 font-bold flex items-center justify-center"
+                  className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 font-bold flex items-center justify-center cursor-pointer"
                 >
                   ✕
                 </button>
               </div>
 
-              {/* Delivery Address Input Form */}
+              {/* Delivery Address Form */}
               <div className="space-y-2 text-xs">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 mb-0.5">पूरा नाम (Full Name)</label>
@@ -624,7 +1027,7 @@ export default function OndcBuyerScreen({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-0.5">मकान नं. व सड़क का नाम (Street Address)</label>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-0.5">मकान नं. व सड़क का नाम</label>
                   <input
                     type="text"
                     value={address.street}
@@ -656,20 +1059,19 @@ export default function OndcBuyerScreen({
                 </div>
               </div>
 
-              {/* ── Logistics Provider Selection & Calculated ETA (Step 4) ── */}
+              {/* Logistics Provider Selection */}
               <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
                 <p className="text-xs font-bold text-slate-800 flex items-center justify-between">
-                  <span>🚚 कूरियर पार्टनर (Logistics Selection):</span>
+                  <span>🚚 कूरियर पार्टनर:</span>
                   <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100 px-1.5 py-0.5 rounded">
                     ETA: {formattedEta}
                   </span>
                 </p>
-
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => setSelectedCourier("India Post (डाक घर)")}
-                    className="p-2 rounded-xl text-left border transition-all text-xs"
+                    className="p-2 rounded-xl text-left border transition-all text-xs cursor-pointer"
                     style={{
                       borderColor: selectedCourier === "India Post (डाक घर)" ? "#5B21B6" : "#E2E8F0",
                       background: selectedCourier === "India Post (डाक घर)" ? "#F3E8FF" : "#FFFFFF",
@@ -682,7 +1084,7 @@ export default function OndcBuyerScreen({
                   <button
                     type="button"
                     onClick={() => setSelectedCourier("Delhivery")}
-                    className="p-2 rounded-xl text-left border transition-all text-xs"
+                    className="p-2 rounded-xl text-left border transition-all text-xs cursor-pointer"
                     style={{
                       borderColor: selectedCourier === "Delhivery" ? "#5B21B6" : "#E2E8F0",
                       background: selectedCourier === "Delhivery" ? "#F3E8FF" : "#FFFFFF",
@@ -694,11 +1096,11 @@ export default function OndcBuyerScreen({
                 </div>
               </div>
 
-              {/* Final Confirm Payment Button */}
+              {/* Pay & Order Button */}
               <button
                 type="button"
                 onClick={handleFinalOrderPlacement}
-                className="w-full py-3.5 rounded-xl font-bold text-white text-sm shadow-md active:scale-98 transition flex items-center justify-center gap-2"
+                className="w-full py-3.5 rounded-xl font-bold text-white text-sm shadow-md active:scale-98 transition flex items-center justify-center gap-2 cursor-pointer"
                 style={{
                   background:
                     buyerPlatform === "PhonePe Pincode"
@@ -713,14 +1115,13 @@ export default function OndcBuyerScreen({
           </div>
         )}
 
-        {/* ── STAGE 3: Order Confirmation & Live Tracking (Beckn Confirm) ── */}
+        {/* ── STAGE 3: Order Confirmation & Live Tracking ── */}
         {checkoutStage === "success" && confirmedOrderDetails && (
           <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-end z-50">
             <div className="bg-white w-full rounded-t-3xl p-5 space-y-4 max-h-[90%] overflow-y-auto animate-slide-up text-center">
               <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-3xl mx-auto shadow-xs">
                 ✓
               </div>
-
               <div>
                 <h3 className="text-lg font-bold text-slate-900">🎉 आर्डर सफलतापूर्वक दर्ज हुआ!</h3>
                 <p className="text-xs text-slate-500 mt-0.5">
@@ -728,7 +1129,6 @@ export default function OndcBuyerScreen({
                 </p>
               </div>
 
-              {/* Delivery ETA Card */}
               <div className="p-3.5 bg-purple-50 rounded-2xl border border-purple-200 text-left text-xs space-y-1.5">
                 <div className="flex justify-between font-bold text-purple-900">
                   <span>अनुमानित डिलीवरी (ETA):</span>
@@ -738,10 +1138,10 @@ export default function OndcBuyerScreen({
                   कूरियर: <span className="font-semibold text-slate-900">{confirmedOrderDetails.courierName}</span>
                 </p>
                 <p className="text-[11px] text-slate-600">
-                  डिलीवरी पता: {confirmedOrderDetails.deliveryAddress.street}, {confirmedOrderDetails.deliveryAddress.city} - {confirmedOrderDetails.deliveryAddress.pincode}
+                  डिलीवरी पता: {confirmedOrderDetails.deliveryAddress.street}, {confirmedOrderDetails.deliveryAddress.city}
                 </p>
                 <div className="border-t border-purple-200/80 pt-1 flex justify-between text-emerald-800 font-bold">
-                  <span>कुल भुगतान (Paid via UPI):</span>
+                  <span>कुल भुगतान:</span>
                   <span>₹{confirmedOrderDetails.quote.totalPrice}</span>
                 </div>
               </div>
@@ -753,7 +1153,7 @@ export default function OndcBuyerScreen({
               <button
                 type="button"
                 onClick={() => setCheckoutStage("closed")}
-                className="w-full py-3.5 rounded-xl font-bold text-white text-sm shadow-md active:scale-98 transition"
+                className="w-full py-3.5 rounded-xl font-bold text-white text-sm shadow-md active:scale-98 transition cursor-pointer"
                 style={{
                   background:
                     buyerPlatform === "PhonePe Pincode"
@@ -767,36 +1167,15 @@ export default function OndcBuyerScreen({
           </div>
         )}
 
-        {/* ── Beckn JSON Schema Modal (Judges Proof) ── */}
-        {showBecknModal && (
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-            <div className="bg-slate-900 text-emerald-400 rounded-2xl p-4 w-full max-h-[80%] flex flex-col shadow-2xl border border-slate-700">
-              <div className="flex justify-between items-center border-b border-slate-800 pb-2 mb-2">
-                <span className="text-xs font-bold text-white">ONDC Beckn JSON (`nic2004:52110`)</span>
-                <button
-                  type="button"
-                  onClick={() => setShowBecknModal(null)}
-                  className="text-white text-sm font-bold"
-                >
-                  ✕
-                </button>
-              </div>
-              <pre className="text-[10px] overflow-auto flex-1 font-mono leading-relaxed bg-black/50 p-2 rounded">
-                {JSON.stringify(transformToOndcCatalog(showBecknModal), null, 2)}
-              </pre>
-            </div>
-          </div>
-        )}
-
         {/* ── Bottom Bar: Logout ── */}
         <div className="p-2.5 bg-white border-t border-slate-200 flex items-center justify-between px-5 flex-shrink-0">
           <span className="text-[10px] font-semibold text-slate-500">
-            🛡️ ONDC Verified Buyer Node
+            🛡 ONDC Verified Buyer Node
           </span>
           <button
             type="button"
             onClick={onLogout}
-            className="text-xs font-bold text-purple-700 hover:text-purple-900 active:scale-95"
+            className="text-xs font-bold text-purple-700 hover:text-purple-900 active:scale-95 cursor-pointer"
           >
             लॉगआउट (Logout)
           </button>
