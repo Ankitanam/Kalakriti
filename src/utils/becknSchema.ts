@@ -58,7 +58,7 @@ export function transformToOndcCatalog(product: StoreItem, action: "on_search" |
                 "@ondc/org/returnable": false,
                 "@ondc/org/cancellable": true,
                 "@ondc/org/available_on_cod": true,
-                tags: product.tags || ["Handmade", "ONDC Verified"],
+                tags: product.tags || ["Handmade", "ONDC Ready"],
               },
             ],
           },

@@ -17,7 +17,7 @@ import {
   ensureProductLocalization,
   getLocalizedCity,
 } from "./utils/artisanAiService";
-import { LanguageModal } from "./components/LanguageModal";
+import { LanguageDropdown } from "./components/LanguageDropdown";
 
 interface OndcBuyerScreenProps {
   inventory: StoreItem[];
@@ -46,7 +46,6 @@ export default function OndcBuyerScreen({
   const [selectedProduct, setSelectedProduct] = useState<StoreItem | null>(null);
   const [selectedQty, setSelectedQty] = useState(1);
   const [buyerPlatform, setBuyerPlatform] = useState<"PhonePe Pincode" | "Paytm ONDC">("PhonePe Pincode");
-  const [showLangModal, setShowLangModal] = useState(false);
 
   // 🔍 फुल प्रोडक्ट विवरण स्क्रीन के लिए स्टेट
   const [viewingDetailsProduct, setViewingDetailsProduct] = useState<StoreItem | null>(null);
@@ -340,15 +339,18 @@ export default function OndcBuyerScreen({
               <button
                 type="button"
                 onClick={onLogout}
-                className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white active:scale-95 transition cursor-pointer"
+                className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 border border-white/25 flex items-center justify-center text-white active:scale-95 transition cursor-pointer flex-shrink-0"
                 title={t("logout")}
                 aria-label={t("logout")}
               >
-                ←
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
               </button>
               <div>
-                <p className="text-[10px] uppercase font-bold tracking-widest text-white/80">
-                  {buyerPlatform}
+                <p className="text-[10px] uppercase font-bold tracking-widest text-white/80 flex items-center gap-1">
+                  <span>{buyerPlatform}</span>
+                  <span className="text-[8px] bg-white/25 px-1.5 py-0.2 rounded font-normal uppercase">Sandbox</span>
                 </p>
                 <p className="text-xs font-semibold flex items-center gap-1">
                   <span>📍 {address.city || "बांद्रा वेस्ट, मुंबई"}</span>
@@ -359,25 +361,21 @@ export default function OndcBuyerScreen({
 
             {/* Language Switcher & Cart Icon */}
             <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setShowLangModal(true)}
-                className="px-2 py-1 rounded-lg bg-white/20 hover:bg-white/30 text-white text-xs font-bold flex items-center gap-1 active:scale-95 transition cursor-pointer border border-white/20"
-                title={t("select_language")}
-              >
-                <span>🌐</span>
-                <span className="text-[11px]">{activeLangMeta.nativeName}</span>
-              </button>
+              {/* 🌐 Language Switcher */}
+              <LanguageDropdown theme="buyer" />
 
               <button
                 type="button"
                 onClick={() => setCheckoutStage("cart")}
-                className="relative w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white active:scale-95 cursor-pointer"
+                className="relative w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 border border-white/25 flex items-center justify-center text-white active:scale-95 transition cursor-pointer flex-shrink-0"
                 title={t("your_cart_title").replace(" ({count} सामान)", "")}
               >
                 <span>🛒 </span>
                 {totalCartCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center animate-pulse">
+                  <span
+                    key={totalCartCount}
+                    className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center animate-badge-bump"
+                  >
                     {totalCartCount}
                   </span>
                 )}
@@ -389,7 +387,7 @@ export default function OndcBuyerScreen({
                     prev === "PhonePe Pincode" ? "Paytm ONDC" : "PhonePe Pincode"
                   )
                 }
-                className="text-[10px] font-bold bg-white/20 px-2 py-1.5 rounded-lg border border-white/30 active:scale-95 cursor-pointer"
+                className="text-[10px] font-bold bg-white/20 px-2 py-1.5 rounded-lg border border-white/30 touch-press cursor-pointer"
               >
                 {t("switch_role")}
               </button>
@@ -444,7 +442,7 @@ export default function OndcBuyerScreen({
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3">
-              {filteredProducts.map((item) => {
+              {filteredProducts.map((item, idx) => {
                 const stock = Math.max(0, Number(item.quantity ?? 0));
                 const inCart = cart.find((c) => c.product.id === item.id)?.quantity || 0;
                 const isOutOfStock = stock <= 0;
@@ -452,7 +450,8 @@ export default function OndcBuyerScreen({
                 return (
                   <div
                     key={item.id}
-                    className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-xs flex flex-col justify-between hover:shadow-md transition"
+                    className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-xs flex flex-col justify-between hover:shadow-md transition animate-card-enter"
+                    style={{ animationDelay: `${Math.min(idx * 45, 300)}ms` }}
                   >
                     {/* फोटो पर क्लिक करने से फुल डिस्क्रिप्शन खुलेगा */}
                     <div
@@ -507,7 +506,7 @@ export default function OndcBuyerScreen({
                             e.stopPropagation();
                             openAddToCartModal(item);
                           }}
-                          className={`w-full py-2 rounded-xl text-xs font-bold text-white shadow-xs active:scale-95 transition-all flex items-center justify-center gap-1.5 ${
+                          className={`w-full py-2 rounded-xl text-xs font-bold text-white shadow-xs touch-press transition-all flex items-center justify-center gap-1.5 ${
                             isOutOfStock
                               ? "bg-slate-400 cursor-not-allowed"
                               : "cursor-pointer"
@@ -537,7 +536,7 @@ export default function OndcBuyerScreen({
           <div className="absolute bottom-12 left-4 right-4 z-40 animate-fade-in">
             <div
               onClick={() => setCheckoutStage("cart")}
-              className="p-3 rounded-2xl text-white shadow-xl flex items-center justify-between cursor-pointer active:scale-98 transition"
+              className="p-3 rounded-2xl text-white shadow-xl flex items-center justify-between cursor-pointer touch-press transition"
               style={{
                 background:
                   buyerPlatform === "PhonePe Pincode"
@@ -566,7 +565,7 @@ export default function OndcBuyerScreen({
         {/* 📜 फुल प्रोडक्ट विवरण स्क्रीन (PRODUCT FULL DETAILS MODAL)                */}
         {/* ========================================================================= */}
         {viewingDetailsProduct && (
-          <div className="absolute inset-0 z-50 bg-[#FAF5FF] flex flex-col overflow-hidden animate-in fade-in duration-200">
+          <div className="absolute inset-0 z-50 bg-[#FAF5FF] flex flex-col overflow-hidden animate-page-enter">
             <div
               className="flex items-center justify-between px-4 py-3.5 flex-shrink-0 text-white shadow-md"
               style={{
@@ -579,9 +578,13 @@ export default function OndcBuyerScreen({
               <button
                 type="button"
                 onClick={() => setViewingDetailsProduct(null)}
-                className="w-9 h-9 rounded-full flex items-center justify-center bg-white/20 active:scale-90 transition text-lg cursor-pointer"
+                className="w-9 h-9 rounded-full flex items-center justify-center bg-white/20 hover:bg-white/30 border border-white/25 active:scale-95 transition cursor-pointer text-white"
+                title={t("go_back")}
+                aria-label={t("go_back")}
               >
-                ←
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
               </button>
               <h2
                 className="text-base font-bold tracking-wide"
@@ -768,7 +771,7 @@ export default function OndcBuyerScreen({
                   setViewingDetailsProduct(null);
                   openAddToCartModal(itemToAdd);
                 }}
-                className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold text-white shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 ${
+                className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold text-white shadow-md touch-press transition-all flex items-center justify-center gap-2 ${
                   Number(viewingDetailsProduct.quantity || 0) <= 0
                     ? "bg-slate-400 cursor-not-allowed"
                     : "cursor-pointer"
@@ -794,7 +797,7 @@ export default function OndcBuyerScreen({
 
         {/* ── 🛒 Product Quick-View Modal (Quantity Selector - Stock Guard) ── */}
         {selectedProduct && (
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-end z-50">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-end z-50 animate-fade-in">
             <div className="bg-white w-full rounded-t-3xl p-5 space-y-3.5 max-h-[85%] overflow-y-auto animate-slide-up">
               <div className="flex justify-between items-start border-b pb-3">
                 <div className="flex gap-3">
@@ -838,14 +841,14 @@ export default function OndcBuyerScreen({
                     onClick={() => setSelectedQty((q) => Math.max(1, q - 1))}
                     className={`w-6 h-6 rounded-lg font-bold text-xs flex items-center justify-center transition ${
                       selectedQty <= 1
-                        ? "bg-slate-100 text-slate-300 cursor-not-allowed"
-                        : "bg-slate-100 text-slate-700 active:scale-90 cursor-pointer"
+                        ? "text-slate-300 cursor-not-allowed"
+                        : "text-slate-700 hover:bg-slate-100 cursor-pointer active:scale-90"
                     }`}
                   >
-                    −
+                    -
                   </button>
 
-                  <span className="font-extrabold text-sm text-slate-900 min-w-4 text-center">
+                  <span className="text-xs font-extrabold text-purple-900 w-5 text-center">
                     {selectedQty}
                   </span>
 
@@ -857,11 +860,11 @@ export default function OndcBuyerScreen({
                     }
                     className={`w-6 h-6 rounded-lg font-bold text-xs flex items-center justify-center transition ${
                       selectedQty >= activeStockInfo.availableToAdd
-                        ? "bg-slate-200 text-slate-400 cursor-not-allowed"
-                        : "bg-purple-700 text-white active:scale-90 cursor-pointer"
+                        ? "text-slate-300 cursor-not-allowed"
+                        : "text-purple-700 hover:bg-purple-100 cursor-pointer active:scale-90"
                     }`}
                   >
-                    ＋
+                    +
                   </button>
                 </div>
               </div>
@@ -877,7 +880,7 @@ export default function OndcBuyerScreen({
                 type="button"
                 disabled={activeStockInfo.availableToAdd <= 0}
                 onClick={() => handleAddToCart(selectedProduct, selectedQty)}
-                className={`w-full py-3.5 rounded-xl font-bold text-white text-sm shadow-md active:scale-98 transition flex items-center justify-center gap-2 ${
+                className={`w-full py-3.5 rounded-xl font-bold text-white text-sm shadow-md touch-press transition flex items-center justify-center gap-2 ${
                   activeStockInfo.availableToAdd <= 0
                     ? "bg-slate-400 cursor-not-allowed"
                     : "cursor-pointer"
@@ -904,7 +907,7 @@ export default function OndcBuyerScreen({
 
         {/* ── STAGE 1: Cart Modal (Empty Cart Handled - Bug 4 Fixed) ── */}
         {checkoutStage === "cart" && (
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-end z-50">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-end z-50 animate-fade-in">
             <div className="bg-white w-full rounded-t-3xl p-5 space-y-3.5 max-h-[88%] overflow-y-auto animate-slide-up">
               <div className="flex justify-between items-center border-b pb-2.5">
                 <div className="flex items-center gap-2">
@@ -942,45 +945,53 @@ export default function OndcBuyerScreen({
               ) : (
                 <>
                   {/* Cart Items List */}
-                  <div className="divide-y divide-slate-100 max-h-44 overflow-y-auto">
-                    {cart.map((c) => {
-                      const currentStock = Math.max(0, Number(liveInventory.find((it) => it.id === c.product.id)?.quantity ?? 0));
-                      const isMax = c.quantity >= currentStock;
+                  <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                    {cart.map((cartItem) => {
+                      const itemTotal = Number(cartItem.product.suggested_price) * cartItem.quantity;
+                      const maxStock = Number(cartItem.product.quantity || 1);
 
                       return (
-                        <div key={c.product.id} className="py-2.5 flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 min-w-0">
+                        <div
+                          key={cartItem.product.id}
+                          className="flex items-center justify-between p-2.5 bg-slate-50 rounded-2xl border border-slate-200"
+                        >
+                          <div className="flex items-center gap-2.5">
                             <img
-                              src={c.product.imageUrl}
-                              alt={c.product.title_en}
-                              className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
+                              src={cartItem.product.imageUrl}
+                              alt={cartItem.product.title_en}
+                              className="w-12 h-12 rounded-xl object-cover"
                             />
-                            <div className="min-w-0">
-                              <p className="text-xs font-bold text-slate-800 truncate">{getDisplayTitle(c.product)}</p>
-                              <p className="text-[10px] text-slate-500">₹{c.product.suggested_price} × {c.quantity}</p>
+                            <div>
+                              <h4 className="text-xs font-bold text-slate-900 line-clamp-1">{getDisplayTitle(cartItem.product)}</h4>
+                              <p className="text-[11px] text-emerald-700 font-extrabold">
+                                ₹{cartItem.product.suggested_price} × {cartItem.quantity} = ₹{itemTotal}
+                              </p>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-1.5 bg-slate-100 px-1.5 py-0.5 rounded-lg">
+                          {/* Incrementor/Decrementor */}
+                          <div className="flex items-center gap-1.5 bg-white px-1.5 py-0.5 rounded-xl border border-slate-300">
                             <button
                               type="button"
-                              onClick={() => handleDecreaseCartQty(c.product.id)}
-                              className="w-5 h-5 rounded bg-white font-bold text-xs flex items-center justify-center shadow-2xs cursor-pointer"
+                              onClick={() => handleDecreaseCartQty(cartItem.product.id)}
+                              className="w-5 h-5 text-xs font-bold text-slate-600 flex items-center justify-center cursor-pointer hover:bg-slate-100 rounded"
                             >
-                              −
+                              -
                             </button>
-                            <span className="font-bold text-xs min-w-3 text-center">{c.quantity}</span>
+                            <span className="text-xs font-bold text-slate-900 w-4 text-center">
+                              {cartItem.quantity}
+                            </span>
                             <button
                               type="button"
-                              disabled={isMax}
-                              onClick={() => handleIncreaseCartQty(c.product.id)}
-                              className={`w-5 h-5 rounded font-bold text-xs flex items-center justify-center shadow-2xs ${
-                                isMax
-                                  ? "bg-slate-200 text-slate-400 cursor-not-allowed"
-                                  : "bg-purple-700 text-white cursor-pointer"
+                              disabled={cartItem.quantity >= maxStock}
+                              onClick={() => handleIncreaseCartQty(cartItem.product.id)}
+                              className={`w-5 h-5 text-xs font-bold flex items-center justify-center rounded ${
+                                cartItem.quantity >= maxStock
+                                  ? "text-slate-300 cursor-not-allowed"
+                                  : "text-slate-600 hover:bg-slate-100 cursor-pointer"
                               }`}
                             >
-                              ＋
+                              +
                             </button>
                           </div>
                         </div>
@@ -988,8 +999,8 @@ export default function OndcBuyerScreen({
                     })}
                   </div>
 
-                  {/* Price Quote Breakdown */}
-                  <div className="p-3 bg-purple-50/60 rounded-2xl border border-purple-200 text-xs space-y-1.5">
+                  {/* Price Quote Summary */}
+                  <div className="p-3 bg-purple-50 rounded-2xl border border-purple-200 text-xs space-y-1.5">
                     <div className="flex justify-between text-slate-600">
                       <span>{t("items_total_value")}</span>
                       <span>₹{cartQuote.itemTotal}</span>
@@ -1010,7 +1021,7 @@ export default function OndcBuyerScreen({
                   <button
                     type="button"
                     onClick={() => setCheckoutStage("address")}
-                    className="w-full py-3.5 rounded-xl font-bold text-white text-sm shadow-md active:scale-98 transition flex items-center justify-center gap-2 cursor-pointer"
+                    className="w-full py-3.5 rounded-xl font-bold text-white text-sm shadow-md touch-press transition flex items-center justify-center gap-2 cursor-pointer"
                     style={{
                       background:
                         buyerPlatform === "PhonePe Pincode"
@@ -1029,7 +1040,7 @@ export default function OndcBuyerScreen({
 
         {/* ── STAGE 2: Step 4 Delivery Address ── */}
         {checkoutStage === "address" && (
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-end z-50">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-end z-50 animate-fade-in">
             <div className="bg-white w-full rounded-t-3xl p-5 space-y-3.5 max-h-[90%] overflow-y-auto animate-slide-up">
               <div className="flex justify-between items-center border-b pb-2.5">
                 <div className="flex items-center gap-2">
@@ -1162,7 +1173,7 @@ export default function OndcBuyerScreen({
               <button
                 type="button"
                 onClick={handleFinalOrderPlacement}
-                className="w-full py-3.5 rounded-xl font-bold text-white text-sm shadow-md active:scale-98 transition flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full py-3.5 rounded-xl font-bold text-white text-sm shadow-md touch-press transition flex items-center justify-center gap-2 cursor-pointer"
                 style={{
                   background:
                     buyerPlatform === "PhonePe Pincode"
@@ -1179,9 +1190,9 @@ export default function OndcBuyerScreen({
 
         {/* ── STAGE 3: Order Confirmation & Live Tracking ── */}
         {checkoutStage === "success" && confirmedOrderDetails && (
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-end z-50">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-end z-50 animate-fade-in">
             <div className="bg-white w-full rounded-t-3xl p-5 space-y-4 max-h-[90%] overflow-y-auto animate-slide-up text-center">
-              <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-3xl mx-auto shadow-xs">
+              <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-3xl mx-auto shadow-xs animate-scale-in">
                 ✓
               </div>
               <div>
@@ -1215,7 +1226,7 @@ export default function OndcBuyerScreen({
               <button
                 type="button"
                 onClick={() => setCheckoutStage("closed")}
-                className="w-full py-3.5 rounded-xl font-bold text-white text-sm shadow-md active:scale-98 transition cursor-pointer"
+                className="w-full py-3.5 rounded-xl font-bold text-white text-sm shadow-md touch-press transition cursor-pointer"
                 style={{
                   background:
                     buyerPlatform === "PhonePe Pincode"
@@ -1231,8 +1242,9 @@ export default function OndcBuyerScreen({
 
         {/* ── Bottom Bar: Logout ── */}
         <div className="p-2.5 bg-white border-t border-slate-200 flex items-center justify-between px-5 flex-shrink-0">
-          <span className="text-[10px] font-semibold text-slate-500">
-            🛡 ONDC Verified Buyer Node
+          <span className="text-[10px] font-semibold text-slate-500 flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+            <span>{t("buyer_sandbox_badge")}</span>
           </span>
           <button
             type="button"
@@ -1242,13 +1254,6 @@ export default function OndcBuyerScreen({
             {t("logout")}
           </button>
         </div>
-
-        {/* Language Modal for Buyer */}
-        <LanguageModal
-          isOpen={showLangModal}
-          onClose={() => setShowLangModal(false)}
-          theme="buyer"
-        />
       </div>
     </div>
   );

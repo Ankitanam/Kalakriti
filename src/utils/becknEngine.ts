@@ -117,7 +117,7 @@ export function executeBecknSearch(query: string, inventory: StoreItem[]) {
                 value: String(item.suggested_price || 199),
               },
               quantity: { available: { count: String(item.quantity || 1) } },
-              tags: item.tags || ["Handmade", "ONDC Verified"],
+              tags: item.tags || ["Handmade", "ONDC Ready"],
             })),
           },
         ],

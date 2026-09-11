@@ -1,7 +1,7 @@
 // src/OnboardingScreen.tsx
 import { useState } from "react";
 import { useLanguage } from "./context/LanguageContext";
-import { LanguageModal } from "./components/LanguageModal";
+import { LanguageDropdown } from "./components/LanguageDropdown";
 
 type Stage = "landing" | "otp";
 export type UserRole = "seller" | "buyer";
@@ -18,9 +18,8 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [focusedOtp, setFocusedOtp] = useState<number | null>(null);
 
-  // 🌐 Multilingual Language Hook & Modal State
-  const { t, currentLang } = useLanguage();
-  const [showLangModal, setShowLangModal] = useState(false);
+  // 🌐 Multilingual Language Hook
+  const { t } = useLanguage();
 
   const isBuyer = role === "buyer";
 
@@ -103,27 +102,39 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
 
         {/* ─────────────── LANDING STAGE ─────────────── */}
         {stage === "landing" && (
-          <div className="flex-1 flex flex-col overflow-y-auto" style={{ scrollbarWidth: "none" }}>
-            {/* ── True-to-Life Hero Photo Banner ── */}
-            <div className="relative flex-shrink-0 overflow-hidden" style={{ height: 260 }}>
-              <img
-                src={theme.heroImg}
-                alt="Indian Craft Banner"
-                className="w-full h-full object-cover transition-all duration-500"
-              />
-              <div
-                className="absolute inset-0 transition-opacity duration-300"
-                style={{
-                  background: isBuyer
-                    ? "linear-gradient(180deg, rgba(46,16,101,0.5) 0%, rgba(46,16,101,0.1) 40%, #FAF5FF 100%)"
-                    : "linear-gradient(180deg, rgba(61,31,15,0.45) 0%, rgba(61,31,15,0.15) 40%, #FDF8F5 100%)",
-                }}
-              />
+          <div className="flex-1 flex flex-col overflow-y-auto animate-page-enter" style={{ scrollbarWidth: "none" }}>
+            {/* ── True-to-Life Hero Photo Banner (Crossfade) ── */}
+            <div className="relative flex-shrink-0" style={{ height: 260 }}>
+              {/* Clipped background images & gradient */}
+              <div className="absolute inset-0 overflow-hidden">
+                <img
+                  src="https://plus.unsplash.com/premium_photo-1673395434835-19ec34a81583?q=80&w=800&auto=format&fit=crop"
+                  alt="Artisan Seller Banner"
+                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-350 ease-out ${
+                    isBuyer ? "opacity-0 pointer-events-none" : "opacity-100"
+                  }`}
+                />
+                <img
+                  src="https://images.unsplash.com/photo-1776336512006-8637d32a06da?q=80&w=800&auto=format&fit=crop"
+                  alt="ONDC Buyer Banner"
+                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-350 ease-out ${
+                    isBuyer ? "opacity-100" : "opacity-0 pointer-events-none"
+                  }`}
+                />
+                <div
+                  className="absolute inset-0 transition-opacity duration-300"
+                  style={{
+                    background: isBuyer
+                      ? "linear-gradient(180deg, rgba(46,16,101,0.5) 0%, rgba(46,16,101,0.1) 40%, #FAF5FF 100%)"
+                      : "linear-gradient(180deg, rgba(61,31,15,0.45) 0%, rgba(61,31,15,0.15) 40%, #FDF8F5 100%)",
+                  }}
+                />
+              </div>
 
               {/* Logo / Brand Header */}
               <div className="absolute top-4 left-5 flex items-center gap-2 z-10">
                 <div
-                  className="w-9 h-9 rounded-2xl flex items-center justify-center shadow-lg text-white"
+                  className="w-9 h-9 rounded-2xl flex items-center justify-center shadow-lg text-white transition-transform duration-300 active:scale-95"
                   style={{
                     background: theme.btnGradient,
                     border: "1.5px solid rgba(255,255,255,0.3)",
@@ -144,24 +155,19 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
                 </div>
               </div>
 
-              {/* 🌐 Flipkart-Style Floating Language Switcher Button */}
-              <button
-                type="button"
-                onClick={() => setShowLangModal(true)}
-                className="absolute top-4 right-4 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-white bg-black/40 backdrop-blur-md border border-white/30 shadow-md active:scale-95 transition cursor-pointer"
-              >
-                <span>🌐</span>
-                <span>{currentLang.toUpperCase()}</span>
-                <span className="text-[10px]">▾</span>
-              </button>
+              {/* 🌐 Universal Floating Language Dropdown */}
+              <LanguageDropdown
+                theme="glass"
+                className="absolute top-4 right-4 z-30"
+              />
 
               {/* ONDC Badge top-right */}
               <div
-                className="absolute top-13 right-4 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold shadow-md z-10 bg-white/95"
+                className="absolute top-14 right-4 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold shadow-md z-10 bg-white/95 transition-all duration-300"
                 style={{ color: theme.primary, border: `1px solid ${theme.border}` }}
               >
                 <span>✨</span>
-                <span>{isBuyer ? "ONDC Buyer" : "ONDC Seller"}</span>
+                <span>{isBuyer ? "ONDC Ready Buyer (Sandbox)" : "ONDC Ready Seller (MSN)"}</span>
               </div>
 
               {/* Cultural Tagline */}
@@ -176,19 +182,30 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
             {/* ── Content Card ── */}
             <div className="flex-1 flex flex-col px-6 pt-2 pb-4">
               
-              {/* ── ROLE SWITCHER (विक्रेता vs खरीदार) ── */}
+              {/* ── ROLE SWITCHER (विक्रेता vs खरीदार) WITH SLIDING INDICATOR ── */}
               <div
-                className="p-1 rounded-2xl flex mb-4 shadow-inner"
+                className="p-1 rounded-2xl flex mb-4 relative shadow-inner overflow-hidden"
                 style={{ background: isBuyer ? "#EDE9FE" : "#EDE0D4" }}
               >
+                {/* Sliding indicator pill */}
+                <div
+                  className="absolute top-1 bottom-1 rounded-xl transition-transform duration-260 ease-out"
+                  style={{
+                    width: "calc(50% - 4px)",
+                    left: 2,
+                    transform: isBuyer ? "translate3d(calc(100% + 4px), 0, 0)" : "translate3d(0, 0, 0)",
+                    background: isBuyer ? "#5B21B6" : "#6B3A2A",
+                    boxShadow: isBuyer
+                      ? "0 2px 10px rgba(91, 33, 182, 0.4)"
+                      : "0 2px 10px rgba(107, 58, 42, 0.35)",
+                  }}
+                />
                 <button
                   type="button"
                   onClick={() => setRole("seller")}
-                  className="flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                  className="flex-1 py-2 rounded-xl text-xs font-bold transition-colors duration-200 flex items-center justify-center gap-1.5 relative z-10 cursor-pointer touch-press"
                   style={{
-                    background: !isBuyer ? "#6B3A2A" : "transparent",
                     color: !isBuyer ? "white" : "#6B3A2A",
-                    boxShadow: !isBuyer ? "0 2px 8px rgba(107, 58, 42, 0.3)" : "none",
                   }}
                 >
                   <span>🏺</span>
@@ -197,11 +214,9 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
                 <button
                   type="button"
                   onClick={() => setRole("buyer")}
-                  className="flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                  className="flex-1 py-2 rounded-xl text-xs font-bold transition-colors duration-200 flex items-center justify-center gap-1.5 relative z-10 cursor-pointer touch-press"
                   style={{
-                    background: isBuyer ? "#5B21B6" : "transparent",
                     color: isBuyer ? "white" : "#5B21B6",
-                    boxShadow: isBuyer ? "0 2px 8px rgba(91, 33, 182, 0.35)" : "none",
                   }}
                 >
                   <span>🛍️</span>
@@ -209,8 +224,8 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
                 </button>
               </div>
 
-              {/* Welcome Heading */}
-              <div className="mb-4">
+              {/* Welcome Heading (Smooth Role Crossfade) */}
+              <div key={role} className="mb-4 animate-fade-in">
                 <h1
                   className="text-2xl font-bold leading-tight mb-1"
                   style={{ color: theme.textDark, fontFamily: "'Noto Serif', serif" }}
@@ -231,10 +246,11 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
                   {t("mobile_label")}
                 </label>
                 <div
-                  className="flex items-center rounded-2xl overflow-hidden transition-all duration-200"
+                  className="flex items-center rounded-2xl overflow-hidden transition-all duration-200 focus-within:shadow-md"
                   style={{
                     border: mobile ? `2px solid ${theme.primary}` : `1.5px solid ${theme.border}`,
                     background: "#FFFFFF",
+                    boxShadow: mobile ? `0 0 0 3px ${theme.primary}18` : undefined,
                   }}
                 >
                   <div
@@ -284,7 +300,7 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
                   }
                 }}
                 disabled={mobile.length !== 10}
-                className="w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 font-bold text-base text-white shadow-md active:scale-[0.98] transition disabled:opacity-50 mb-3 cursor-pointer"
+                className="w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 font-bold text-base text-white shadow-md touch-press transition-all disabled:opacity-50 mb-3 cursor-pointer"
                 style={{
                   background: theme.btnGradient,
                   boxShadow: mobile.length === 10 ? theme.shadow : "none",
@@ -309,7 +325,7 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
               <button
                 type="button"
                 onClick={handleCompleteLogin}
-                className="w-full flex items-center justify-center gap-2.5 rounded-2xl py-3 font-semibold text-sm transition-all active:scale-[0.98] mb-3 bg-white border border-stone-200 shadow-xs hover:shadow-md text-slate-800 cursor-pointer"
+                className="w-full flex items-center justify-center gap-2.5 rounded-2xl py-3 font-semibold text-sm transition-all touch-press mb-3 bg-white border border-stone-200 shadow-xs hover:shadow-md text-slate-800 cursor-pointer"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24">
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
@@ -322,7 +338,7 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
 
               {/* Trust Badge */}
               <div
-                className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl mt-auto"
+                className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl mt-auto transition-all duration-300"
                 style={{
                   background: isBuyer ? "#F3E8FF" : "#DCFCE7",
                   border: isBuyer ? "1px solid #DDD6FE" : "1px solid #BBF7D0",
@@ -339,21 +355,27 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
 
         {/* ─────────────── OTP STAGE ─────────────── */}
         {stage === "otp" && (
-          <div className="flex-1 flex flex-col px-6 pt-6" style={{ overflow: "hidden" }}>
+          <div className="flex-1 flex flex-col px-6 pt-6 animate-fade-in" style={{ overflow: "hidden" }}>
             {/* Back */}
             <button
               type="button"
               onClick={() => setStage("landing")}
-              className="flex items-center gap-1.5 mb-6 self-start active:scale-95 transition cursor-pointer"
+              className="flex items-center gap-2 mb-6 self-start active:scale-95 transition cursor-pointer"
               style={{ color: theme.primary }}
+              title={t("go_back")}
+              aria-label={t("go_back")}
             >
-              <span className="text-sm font-bold">←</span>
+              <div className="w-8 h-8 rounded-full flex items-center justify-center bg-black/5 hover:bg-black/10 border border-black/10 transition">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
               <span className="text-xs font-semibold" style={{ fontFamily: "'Noto Serif', serif" }}>{t("go_back")}</span>
             </button>
 
             <div className="text-center mb-6">
               <div
-                className="w-16 h-16 rounded-3xl flex items-center justify-center text-2xl mx-auto mb-3 shadow-xs"
+                className="w-16 h-16 rounded-3xl flex items-center justify-center text-2xl mx-auto mb-3 shadow-xs animate-scale-in"
                 style={{ background: isBuyer ? "#EDE9FE" : "#FEE2E2", border: `1px solid ${theme.border}` }}
               >
                 {isBuyer ? "🛍️" : "📱"}
@@ -380,7 +402,7 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
                   onKeyDown={(e) => handleOtpKey(i, e)}
                   onFocus={() => setFocusedOtp(i)}
                   onBlur={() => setFocusedOtp(null)}
-                  className="w-12 h-14 text-center text-xl font-bold rounded-2xl outline-none transition-all"
+                  className="w-12 h-14 text-center text-xl font-bold rounded-2xl outline-none transition-all duration-150"
                   style={{
                     background: digit ? (isBuyer ? "#EDE9FE" : "#FFF0E6") : "#FFFFFF",
                     border: focusedOtp === i
@@ -389,6 +411,7 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
                       ? `2px solid ${theme.primary}80`
                       : `1.5px solid ${theme.border}`,
                     color: theme.textDark,
+                    transform: focusedOtp === i ? "scale(1.05)" : "scale(1)",
                   }}
                 />
               ))}
@@ -403,20 +426,13 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
                 }
               }}
               disabled={!otp.every((d) => d)}
-              className="w-full flex items-center justify-center gap-2 rounded-2xl py-4 font-bold text-base text-white shadow-lg transition-all active:scale-[0.98] mt-3 disabled:opacity-50 cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 rounded-2xl py-4 font-bold text-base text-white shadow-lg transition-all touch-press mt-3 disabled:opacity-50 cursor-pointer"
               style={{ background: theme.btnGradient }}
             >
               <span>{isBuyer ? t("enter_market") : t("verify_otp")}</span>
             </button>
           </div>
         )}
-
-        {/* 🌐 Flipkart-Style Language Bottom Sheet */}
-        <LanguageModal
-          isOpen={showLangModal}
-          onClose={() => setShowLangModal(false)}
-          theme={role === "seller" ? "seller" : "buyer"}
-        />
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useLanguage } from "./context/LanguageContext";
+import { LanguageDropdown } from "./components/LanguageDropdown";
 import { getDisplayTitle, getLocalizedProductContent, LocalizedContentMap } from "./utils/artisanAiService";
 
 export interface CatalogData {
@@ -84,36 +85,38 @@ export default function CatalogPreview({
 
         {/* Top App Bar */}
         <div
-          className="flex items-center px-4 py-3 gap-3 flex-shrink-0"
+          className="flex items-center px-4 py-2.5 gap-2.5 flex-shrink-0 min-h-[56px]"
           style={{ background: "#6B3A2A" }}
         >
           <button
             type="button"
             onClick={onBack}
-            className="w-10 h-10 rounded-full flex items-center justify-center text-white active:scale-95 transition cursor-pointer"
-            style={{ background: "rgba(255,255,255,0.12)" }}
+            className="w-9 h-9 rounded-full flex items-center justify-center text-white active:scale-95 transition cursor-pointer flex-shrink-0 bg-white/15 hover:bg-white/25 border border-white/20"
             title={t("go_back")}
             aria-label={t("go_back")}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
               <path
                 d="M15 18l-6-6 6-6"
-                stroke="white"
+                stroke="currentColor"
                 strokeWidth="2.2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
             </svg>
           </button>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0 flex flex-col justify-center">
             <h1
-              className="text-xl font-bold text-white tracking-wide"
+              className="text-base font-bold text-white tracking-wide truncate leading-tight"
               style={{ fontFamily: "'Noto Serif', serif" }}
             >
               {t("preview_listing")}
             </h1>
-            <p className="text-xs text-white/70 -mt-0.5">Kalakriti AI Catalog</p>
+            <p className="text-[10px] text-white/75 font-medium truncate leading-tight mt-0.5">Kalakriti AI Catalog</p>
           </div>
+
+          {/* 🌐 Language Switcher */}
+          <LanguageDropdown theme="seller" />
         </div>
 
         {/* Scrollable Content Body */}
@@ -124,7 +127,7 @@ export default function CatalogPreview({
           {/* ========================================================================= */}
           {/* 📸 1. मुख्य अपलोड की गई फोटो (HERO PRODUCT IMAGE)                        */}
           {/* ========================================================================= */}
-          <div className="relative w-full h-64 rounded-3xl overflow-hidden shadow-md bg-stone-100 border border-[#C4886B]/30 flex-shrink-0">
+          <div className="relative w-full h-64 rounded-3xl overflow-hidden shadow-md bg-stone-100 border border-[#C4886B]/30 flex-shrink-0 animate-scale-in">
             <img
               src={data.imageUrl || "https://images.unsplash.com/photo-1604264726154-26480e76f4e1?w=500"}
               alt={data.title_en || "Product Preview"}
@@ -147,13 +150,16 @@ export default function CatalogPreview({
           </div>
 
           {/* 🏷️ Product Title Card (Prominent Localized Craft Name) */}
-          <div className="bg-white rounded-2xl p-4 shadow-xs border border-[#C4886B]/30 space-y-1">
+          <div className="bg-white rounded-2xl p-4 shadow-xs border border-[#C4886B]/30 space-y-1 animate-card-enter">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-bold uppercase tracking-wider text-[#8B4513]">
                 {activeLangMeta.nativeName} Craft
               </span>
-              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
-                ONDC Verified
+              <span
+                className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded"
+                title={t("ondc_ready_tooltip")}
+              >
+                {t("ondc_staging_badge")}
               </span>
             </div>
             <h3
@@ -315,8 +321,8 @@ export default function CatalogPreview({
                 <span>📋</span>
                 <span>{isNative ? t("specs_table_title") : "Product Specifications"}</span>
               </span>
-              <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/90 px-2 py-0.5 rounded-full border border-emerald-300">
-                {t("ondc_verified_badge")}
+              <span className="text-[10px] font-bold text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded-full border border-amber-300">
+                {t("ondc_staging_badge")}
               </span>
             </div>
 
@@ -331,6 +337,20 @@ export default function CatalogPreview({
                   {t("specs_not_available")}
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* ONDC Network Node Status Note */}
+          <div className="p-3 rounded-2xl bg-[#FFF8F0] border border-[#E8C9B0] text-[11px] text-[#6B3A2A] flex items-start gap-2.5 shadow-xs">
+            <span className="text-base flex-shrink-0 mt-0.5">🌐</span>
+            <div>
+              <p className="font-bold flex items-center gap-1.5">
+                <span>{t("ondc_node_type")}</span>
+                <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded-full bg-amber-200 text-amber-900 uppercase">Staging</span>
+              </p>
+              <p className="text-stone-600 text-[10px] mt-0.5 leading-relaxed">
+                {t("ondc_staging_notice")}
+              </p>
             </div>
           </div>
 
@@ -359,7 +379,7 @@ export default function CatalogPreview({
                     #Kalakriti
                   </span>
                   <span className="px-2.5 py-1 rounded-full text-xs font-medium border bg-[#FAF5EE] text-[#6B3A2A] border-[#C4886B]/35">
-                    #ONDC Verified
+                    #ONDC Ready
                   </span>
                 </>
               )}
@@ -376,7 +396,7 @@ export default function CatalogPreview({
             <button
               type="button"
               onClick={onEdit}
-              className="py-3.5 px-5 rounded-2xl font-bold text-xs border text-[#6B3A2A] bg-white active:scale-95 transition cursor-pointer shadow-xs"
+              className="py-3.5 px-5 rounded-2xl font-bold text-xs border text-[#6B3A2A] bg-white touch-press transition cursor-pointer shadow-xs"
               style={{ borderColor: "rgba(196,136,107,0.5)" }}
             >
               {t("edit_button")}
@@ -385,14 +405,14 @@ export default function CatalogPreview({
           <button
             type="button"
             onClick={onCheckout}
-            className="flex-1 py-3.5 px-4 rounded-2xl font-bold text-xs text-white shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+            className="flex-1 py-3.5 px-4 rounded-2xl font-bold text-xs text-white shadow-lg touch-press transition-all flex items-center justify-center gap-2 cursor-pointer"
             style={{
               background: "linear-gradient(135deg, #8B4513 0%, #6B3A2A 100%)",
               boxShadow: "0 8px 24px rgba(107,58,42,0.3)",
             }}
           >
             <span>🚀</span>
-            <span>{t("approve_and_publish")}</span>
+            <span>{t("ondc_publish_action")}</span>
           </button>
         </div>
       </div>

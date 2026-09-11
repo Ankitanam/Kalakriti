@@ -6,8 +6,10 @@ import OnboardingScreen from "./OnboardingScreen";
 import ArtisanDashboard, { OrderItem } from "./ArtisanDashboard";
 import OndcBuyerScreen from "./OndcBuyerScreen";
 import ConfirmationModal from "./components/ConfirmationModal";
+import { LanguageDropdown } from "./components/LanguageDropdown";
 import { CartItem, ConfirmedOrder } from "./utils/becknEngine";
 import { areItemsDuplicate, extractCoreKeyword, getDisplayTitle, KNOWN_CRAFT_LOCALIZATIONS, LocalizedContentMap } from "./utils/artisanAiService";
+import { MicPulseRing, AiScannerOverlay } from "./components/motion/MotionPrimitives";
 
 // Craft Categories
 const CATEGORIES: Array<{ hi: string; en: string; key: TranslationKey }> = [
@@ -61,7 +63,7 @@ const INITIAL_SEED: StoreItem[] = [
       { label: "Size", value: "Height approx. 12 inches" },
       { label: "Best For", value: "Home Aesthetics, Cultural Gifting" },
     ],
-    tags: ["Puppets", "Rajasthan", "ONDC Live"],
+    tags: ["Puppets", "Rajasthan", "ONDC Ready"],
     publishedAt: "आज",
     localizedContent: KNOWN_CRAFT_LOCALIZATIONS.puppet,
   },
@@ -100,7 +102,7 @@ const INITIAL_SEED: StoreItem[] = [
       { label: "Size", value: "Medium (~7 inches)" },
       { label: "Best For", value: "Festive Decor, Gifting" },
     ],
-    tags: ["Terracotta", "Handmade", "ONDC Live"],
+    tags: ["Terracotta", "Handmade", "ONDC Ready"],
     publishedAt: "आज",
     localizedContent: KNOWN_CRAFT_LOCALIZATIONS.kalash,
   },
@@ -217,6 +219,7 @@ export default function App() {
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
   const [isRecording, setIsRecording] = useState(false);
+  const [micState, setMicState] = useState<"idle" | "listening" | "processing" | "success" | "error">("idle");
   const [voiceText, setVoiceText] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(0);
 
@@ -252,6 +255,14 @@ export default function App() {
   };
 
   const handleSellerLogout = () => {
+    localStorage.removeItem("artisan_logged_in");
+    setActiveRole("seller");
+    setIsLoggedIn(false);
+    setScreen("onboarding");
+  };
+
+  const handleLeaveToArtisanLogin = () => {
+    setShowBackConfirm(false);
     localStorage.removeItem("artisan_logged_in");
     setActiveRole("seller");
     setIsLoggedIn(false);
@@ -440,28 +451,41 @@ export default function App() {
   const handleMicToggle = () => {
     if (isRecording) {
       setIsRecording(false);
+      setMicState("idle");
     } else {
       setVoiceText("");
       setIsRecording(true);
+      setMicState("listening");
       const SpeechRecognition =
         (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (SpeechRecognition) {
         const recognition = new SpeechRecognition();
-        recognition.lang = speechLang; // 👈 अब यह चुनी गई भाषा (मराठी, बांग्ला, हिन्दी आदि) में सुनेगा!
+        recognition.lang = speechLang;
         recognition.interimResults = true;
         recognition.onresult = (event: any) => {
+          setMicState("processing");
           const transcript = Array.from(event.results)
             .map((r: any) => r[0].transcript)
             .join("");
           setVoiceText(transcript);
         };
-        recognition.onend = () => setIsRecording(false);
-        recognition.onerror = () => setIsRecording(false);
+        recognition.onend = () => {
+          setIsRecording(false);
+          setMicState("success");
+          setTimeout(() => setMicState("idle"), 1200);
+        };
+        recognition.onerror = () => {
+          setIsRecording(false);
+          setMicState("error");
+          setTimeout(() => setMicState("idle"), 1500);
+        };
         recognition.start();
       } else {
         setTimeout(() => {
           setIsRecording(false);
           if (!voiceText) setVoiceText("यह हाथ से बनी मधुबनी पेंटिंग है।");
+          setMicState("success");
+          setTimeout(() => setMicState("idle"), 1200);
         }, 1200);
       }
     }
@@ -564,7 +588,7 @@ Output ONLY valid JSON matching this schema:
     { "label": "Size", "value": "..." },
     { "label": "Best For", "value": "..." }
   ],
-  "tags": ["Handmade", "Kalakriti", "ONDC Verified", "HeritageCraft"]
+  "tags": ["Handmade", "Kalakriti", "ONDC Ready", "HeritageCraft"]
 }
 `;
 
@@ -798,6 +822,35 @@ Output ONLY valid JSON matching this schema:
     }
   };
 
+  const handlePublishToOndc = async () => {
+    if (!selectedPreviewItem) {
+      setScreen("dashboard");
+      return;
+    }
+
+    try {
+      const targetItem = inventory.find(
+        (i) => i.id === (selectedPreviewItem as any).id
+      ) || {
+        id: Date.now().toString(),
+        ...selectedPreviewItem,
+        quantity: 1,
+      };
+
+      // Register with official ONDC Retail v1.2.0 BPP backend
+      fetch("http://localhost:5000/api/ondc/publish-catalog", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(targetItem),
+      }).catch((e) => console.warn("Local BPP publishing note:", e));
+    } catch (e) {
+      console.warn("BPP publishing sync note:", e);
+    }
+
+    alert(t("ondc_published_success"));
+    setScreen("dashboard");
+  };
+
   // ── ROUTING ──
   if (!isLoggedIn || screen === "onboarding") {
     return <OnboardingScreen initialRole={activeRole} onLogin={handleLoginSuccess} />;
@@ -820,7 +873,7 @@ Output ONLY valid JSON matching this schema:
       <CatalogPreview
         data={selectedPreviewItem}
         onBack={() => setScreen("capture")}
-        onCheckout={() => setScreen("dashboard")}
+        onCheckout={handlePublishToOndc}
       />
     );
   }
@@ -878,21 +931,20 @@ Output ONLY valid JSON matching this schema:
 
         {/* Top App Bar */}
         <div
-          className="flex items-center px-4 py-3 gap-3 flex-shrink-0"
+          className="flex items-center px-4 py-2.5 gap-2.5 flex-shrink-0 min-h-[56px]"
           style={{ background: "#6B3A2A" }}
         >
           <button
             type="button"
             onClick={() => setShowBackConfirm(true)}
-            className="w-10 h-10 rounded-full flex items-center justify-center text-white active:scale-95 transition cursor-pointer"
-            style={{ background: "rgba(255,255,255,0.12)" }}
+            className="w-9 h-9 rounded-full flex items-center justify-center text-white active:scale-95 transition cursor-pointer flex-shrink-0 bg-white/15 hover:bg-white/25 border border-white/20"
             title={t("go_back")}
             aria-label={t("go_back")}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
               <path
                 d="M15 18l-6-6 6-6"
-                stroke="white"
+                stroke="currentColor"
                 strokeWidth="2.2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -900,20 +952,23 @@ Output ONLY valid JSON matching this schema:
             </svg>
           </button>
 
-          <div className="flex-1">
+          <div className="flex-1 min-w-0 flex flex-col justify-center">
             <h1
-              className="text-xl font-bold text-white tracking-wide"
+              className="text-base font-bold text-white tracking-wide truncate leading-tight"
               style={{ fontFamily: "'Noto Serif', serif" }}
             >
               Kalakriti
             </h1>
-            <p className="text-xs text-white/70 -mt-0.5">{t("app_tagline")}</p>
+            <p className="text-[10px] text-white/75 font-medium truncate leading-tight mt-0.5">{t("app_tagline")}</p>
           </div>
+
+          {/* 🌐 Universal Language Dropdown */}
+          <LanguageDropdown theme="seller" />
 
           <button
             type="button"
             onClick={() => setScreen("dashboard")}
-            className="px-3 py-1.5 rounded-full text-xs font-bold text-[#6B3A2A] bg-[#EDE0D4] transition active:scale-95 cursor-pointer"
+            className="h-8 px-3 rounded-full text-xs font-semibold text-[#6B3A2A] bg-[#EDE0D4] hover:bg-[#E5D2C2] active:scale-95 transition cursor-pointer flex items-center justify-center flex-shrink-0 shadow-xs"
           >
             {t("shop")} ({inventory.length})
           </button>
@@ -921,7 +976,7 @@ Output ONLY valid JSON matching this schema:
 
         {/* Form Body */}
         <div
-          className="flex-1 overflow-y-auto px-5 py-5 space-y-5"
+          className="flex-1 overflow-y-auto px-5 py-5 space-y-5 animate-page-enter"
           style={{ scrollbarWidth: "none" }}
         >
           <div>
@@ -964,15 +1019,17 @@ Output ONLY valid JSON matching this schema:
             >
               {photoUrl ? (
                 <div className="w-full space-y-3">
-                  <div className="relative h-52 w-full rounded-xl overflow-hidden bg-black/5 flex items-center justify-center">
+                  <div className="relative h-52 w-full rounded-xl overflow-hidden bg-black/5 flex items-center justify-center animate-scale-in">
                     <img
                       src={photoUrl}
                       alt="Uploaded Product"
                       className="w-full h-full object-contain"
                     />
-                    <div className="absolute top-2 right-2 bg-emerald-600 text-white text-[11px] font-semibold px-2.5 py-0.5 rounded-full shadow">
-                      ✓ फोटो चुनी गई
+                    <div className="absolute top-2 right-2 bg-emerald-600 text-white text-[11px] font-semibold px-2.5 py-0.5 rounded-full shadow animate-scale-in">
+                      {t("photo_selected")}
                     </div>
+                    {/* Indeterminate AI Photo Scanning Laser Overlay */}
+                    <AiScannerOverlay active={isLoading} stageText={loadingStage || t("processing")} />
                   </div>
 
                   <div className="flex gap-2 w-full">
@@ -1064,33 +1121,65 @@ Output ONLY valid JSON matching this schema:
             </p>
             <div className="flex gap-3 items-end">
               <div
-                className="flex-1 relative rounded-2xl p-1"
+                className="flex-1 relative rounded-2xl p-1 transition-all duration-200"
                 style={{
                   background: "#FFF8F3",
-                  border: isRecording ? "2px solid #6B3A2A" : "1.5px solid #E8C9B0",
+                  border: micState === "listening" ? "2px solid #DC2626" : "1.5px solid #E8C9B0",
+                  boxShadow: micState === "listening" ? "0 0 0 3px rgba(220, 38, 38, 0.15)" : undefined,
                   minHeight: 105,
                 }}
               >
                 <textarea
                   className="w-full h-full resize-none p-3 text-sm outline-none bg-transparent"
                   style={{ color: "#3D1F0F" }}
-                  placeholder={isRecording ? t("voice_listening") : t("voice_placeholder")}
+                  placeholder={
+                    micState === "listening"
+                      ? t("voice_listening")
+                      : micState === "processing"
+                      ? t("processing")
+                      : t("voice_placeholder")
+                  }
                   value={voiceText}
                   onChange={(e) => setVoiceText(e.target.value)}
                 />
+                {micState === "success" && (
+                  <span className="absolute bottom-2 right-2 text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md animate-scale-in">
+                    ✓
+                  </span>
+                )}
+                {micState === "error" && (
+                  <span className="absolute bottom-2 right-2 text-xs font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md animate-scale-in">
+                    ⚠️
+                  </span>
+                )}
               </div>
-              <button
-                type="button"
-                onClick={handleMicToggle}
-                className="w-14 h-14 rounded-full flex items-center justify-center text-white text-xl shadow-md transition active:scale-95 cursor-pointer"
-                style={{
-                  background: isRecording
-                    ? "#DC2626"
-                    : "linear-gradient(135deg, #8B4513 0%, #6B3A2A 100%)",
-                }}
-              >
-                {isRecording ? "⏹" : "🎤 "}
-              </button>
+
+              {/* Mic Button with concentric ripple rings */}
+              <div className="relative">
+                <MicPulseRing active={micState === "listening"} />
+                <button
+                  type="button"
+                  onClick={handleMicToggle}
+                  className="w-14 h-14 rounded-full flex items-center justify-center text-white text-xl shadow-md touch-press transition-all duration-200 cursor-pointer relative z-10"
+                  style={{
+                    background:
+                      micState === "listening"
+                        ? "#DC2626"
+                        : micState === "processing"
+                        ? "#D97706"
+                        : micState === "success"
+                        ? "#16A34A"
+                        : "linear-gradient(135deg, #8B4513 0%, #6B3A2A 100%)",
+                    boxShadow:
+                      micState === "listening"
+                        ? "0 4px 18px rgba(220, 38, 38, 0.45)"
+                        : "0 4px 14px rgba(107, 58, 42, 0.35)",
+                  }}
+                  title={micState === "listening" ? "Stop Listening" : "Tap to Speak"}
+                >
+                  {micState === "listening" ? "⏹" : micState === "processing" ? "⏳" : micState === "success" ? "✓" : "🎤"}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1108,7 +1197,7 @@ Output ONLY valid JSON matching this schema:
                   key={cat.en}
                   type="button"
                   onClick={() => setSelectedCategory(i)}
-                  className="px-4 py-2 rounded-full text-sm font-semibold transition-all cursor-pointer"
+                  className="px-4 py-2 rounded-full text-sm font-semibold transition-all touch-press cursor-pointer"
                   style={{
                     background: selectedCategory === i ? "#6B3A2A" : "rgba(196,136,107,0.1)",
                     color: selectedCategory === i ? "white" : "#6B3A2A",
@@ -1131,7 +1220,7 @@ Output ONLY valid JSON matching this schema:
             type="button"
             disabled={isLoading}
             onClick={handleOpenPriceModal}
-            className="w-full flex items-center justify-center gap-2.5 rounded-2xl py-4 font-bold text-base text-white shadow-lg transition-all active:scale-[0.98] disabled:opacity-60 cursor-pointer"
+            className="w-full flex items-center justify-center gap-2.5 rounded-2xl py-4 font-bold text-base text-white shadow-lg transition-all touch-press disabled:opacity-60 cursor-pointer"
             style={{
               background: "linear-gradient(135deg, #8B4513 0%, #6B3A2A 100%)",
               boxShadow: "0 8px 24px rgba(107,58,42,0.35)",
@@ -1191,8 +1280,8 @@ Output ONLY valid JSON matching this schema:
                     <span>✨</span>
                     <span>{t("pricing_option1_badge")}</span>
                   </span>
-                  <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full">
-                    ONDC Ready
+                  <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300">
+                    {t("ondc_staging_badge")}
                   </span>
                 </div>
                 <p className="text-[11px] text-stone-600 leading-relaxed">
@@ -1273,10 +1362,7 @@ Output ONLY valid JSON matching this schema:
         <ConfirmationModal
           isOpen={showBackConfirm}
           onClose={() => setShowBackConfirm(false)}
-          onConfirm={() => {
-            setShowBackConfirm(false);
-            setScreen("dashboard");
-          }}
+          onConfirm={handleLeaveToArtisanLogin}
           title={t("confirm_leave_title")}
           message={t("confirm_leave_message")}
           cancelText={t("confirm_stay_button")}

@@ -24,11 +24,11 @@ export const LanguageModal: React.FC<LanguageModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-xs animate-fade-in"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm rounded-t-3xl p-5 space-y-4 shadow-2xl border-t animate-in slide-in-from-bottom duration-200"
+        className="w-full max-w-sm rounded-t-3xl p-5 space-y-4 shadow-2xl border-t animate-slide-up"
         style={{
           backgroundColor: "#FFFFFF",
           borderColor: isSeller ? "rgba(196,136,107,0.4)" : "rgba(124,58,237,0.3)",
@@ -84,7 +84,7 @@ export const LanguageModal: React.FC<LanguageModalProps> = ({
                   setLanguage(lang.code);
                   onClose();
                 }}
-                className={`p-3 rounded-2xl border text-left transition-all relative flex flex-col justify-between cursor-pointer active:scale-95 ${
+                className={`p-3 rounded-2xl border text-left transition-all relative flex flex-col justify-between cursor-pointer touch-press ${
                   isSelected ? "shadow-sm" : "hover:border-stone-300"
                 }`}
                 style={{

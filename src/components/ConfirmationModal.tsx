@@ -32,7 +32,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="bg-[#FFFDF9] w-full max-w-xs rounded-3xl p-5 space-y-4 border-2 border-[#C4886B] shadow-2xl text-center animate-slide-up"
+        className="bg-[#FFFDF9] w-full max-w-xs rounded-3xl p-5 space-y-4 border-2 border-[#C4886B] shadow-2xl text-center animate-modal-enter"
         style={{ fontFamily: "'Poppins', sans-serif" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -57,7 +57,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="w-full py-3 rounded-2xl font-bold text-sm text-white shadow-md active:scale-98 transition cursor-pointer"
+            className="w-full py-3 rounded-2xl font-bold text-sm text-white shadow-md active:scale-95 transition cursor-pointer"
             style={{ background: "linear-gradient(135deg, #8B4513 0%, #6B3A2A 100%)" }}
           >
             {cancelText}
@@ -70,7 +70,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
               onClose();
               onConfirm();
             }}
-            className={`w-full py-2.5 rounded-2xl font-bold text-xs active:scale-98 transition cursor-pointer ${
+            className={`w-full py-3 rounded-2xl font-bold text-xs active:scale-95 transition cursor-pointer ${
               confirmVariant === "danger"
                 ? "text-red-700 bg-red-50 hover:bg-red-100 border border-red-200"
                 : "text-[#6B3A2A] bg-stone-100 hover:bg-stone-200 border border-stone-300"

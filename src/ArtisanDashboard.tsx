@@ -2,7 +2,9 @@
 import React, { useState } from "react";
 import { StoreItem } from "./App";
 import { useLanguage } from "./context/LanguageContext";
+import { LanguageDropdown } from "./components/LanguageDropdown";
 import { getDisplayTitle, calculateArtisanEarnings, getRandomBuyerCity, getLocalizedCity } from "./utils/artisanAiService";
+import { AnimatedNumber } from "./components/motion/MotionPrimitives";
 
 export interface OrderItem {
   orderId: string;
@@ -147,60 +149,85 @@ export default function ArtisanDashboard({
 
         {/* Top App Bar */}
         <div
-          className="flex items-center px-4 py-3 gap-2 flex-shrink-0"
+          className="flex items-center px-4 py-2.5 gap-2.5 flex-shrink-0 min-h-[56px]"
           style={{ background: "#6B3A2A" }}
         >
           <button
             type="button"
             onClick={onBack}
-            className="w-9 h-9 rounded-2xl flex items-center justify-center text-white active:scale-95 transition"
-            style={{ background: "rgba(255,255,255,0.15)" }}
+            className="w-9 h-9 rounded-full flex items-center justify-center text-white active:scale-95 transition cursor-pointer flex-shrink-0 bg-white/15 hover:bg-white/25 border border-white/20"
             title={t("go_back")}
+            aria-label={t("go_back")}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-              <path d="M15 18l-6-6 6-6" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
 
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-              <h1 className="text-base font-bold text-white tracking-wide truncate" style={{ fontFamily: "'Noto Serif', serif" }}>
+          <div className="flex-1 min-w-0 flex flex-col justify-center">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <h1 className="text-base font-bold text-white tracking-wide truncate leading-tight" style={{ fontFamily: "'Noto Serif', serif" }}>
                 {t("my_store")}
               </h1>
-              <span className="text-[9px] bg-emerald-500/25 text-emerald-300 font-bold px-1.5 py-0.5 rounded border border-emerald-400/30">
-                Node #412
+              <span className="text-[9px] bg-emerald-500/25 text-emerald-300 font-semibold px-2 py-0.5 rounded-full border border-emerald-400/30 flex-shrink-0">
+                ONDC Ready
               </span>
             </div>
-            <p className="text-[10px] text-white/70 truncate">Kalakriti Store</p>
+            <p className="text-[10px] text-white/75 font-medium truncate leading-tight mt-0.5">
+              Kalakriti Store • Node #412
+            </p>
           </div>
 
-          <button
-            type="button"
-            onClick={handleSimulateBuyerOrder}
-            className="px-2 py-1 rounded-xl text-[10px] font-bold text-amber-900 bg-amber-200 hover:bg-amber-300 shadow-xs active:scale-95 border border-amber-400"
-            title="Simulate PhonePe Buyer Order"
-          >
-            ⚡ {t("test_order")}
-          </button>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {/* 🌐 Language Switcher */}
+            <LanguageDropdown theme="seller" />
 
-          <button
-            type="button"
-            onClick={onLogout}
-            className="px-2 py-1 rounded-xl text-[10px] font-bold text-white bg-red-900/60 border border-red-400/40 active:scale-95 transition"
-            title={t("logout")}
-          >
-            {t("logout")}
-          </button>
+            <button
+              type="button"
+              onClick={handleSimulateBuyerOrder}
+              className="h-8 px-2.5 rounded-full text-[11px] font-semibold text-amber-900 bg-amber-200 hover:bg-amber-300 border border-amber-400 shadow-xs active:scale-95 transition cursor-pointer flex items-center gap-1"
+              title="Simulate PhonePe Buyer Order"
+            >
+              <span>⚡</span>
+              <span className="hidden xs:inline">{t("test_order")}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onLogout}
+              className="h-8 px-2.5 rounded-full text-[11px] font-semibold text-white bg-red-900/60 hover:bg-red-900/80 border border-red-400/40 active:scale-95 transition cursor-pointer flex items-center gap-1"
+              title={t("logout")}
+              aria-label={t("logout")}
+            >
+              <span>🚪</span>
+              <span className="hidden sm:inline">{t("logout")}</span>
+            </button>
+          </div>
         </div>
 
-        {/* ── 3 Tabs (सामान, आर्डर, कमाई) ── */}
-        <div className="flex px-4 pt-3 pb-1 bg-[#FFFBF7] border-b border-[#F0DFD2] gap-1.5 flex-shrink-0">
+        {/* ── 3 Tabs (सामान, आर्डर, कमाई) WITH SLIDING INDICATOR ── */}
+        <div className="flex px-4 pt-3 pb-1 bg-[#FFFBF7] border-b border-[#F0DFD2] gap-1.5 flex-shrink-0 relative">
+          {/* Sliding indicator pill */}
+          <div
+            className="absolute top-3 bottom-1 rounded-xl transition-transform duration-250 ease-out bg-[#6B3A2A]"
+            style={{
+              width: "calc((100% - 32px - 6px) / 3)",
+              left: 16,
+              transform:
+                activeTab === "products"
+                  ? "translate3d(0, 0, 0)"
+                  : activeTab === "orders"
+                  ? "translate3d(calc(100% + 3px), 0, 0)"
+                  : "translate3d(calc(200% + 6px), 0, 0)",
+              boxShadow: "0 2px 8px rgba(107, 58, 42, 0.3)",
+            }}
+          />
+
           <button
             type="button"
             onClick={() => setActiveTab("products")}
-            className="flex-1 py-2 rounded-xl text-xs font-bold transition-all text-center flex items-center justify-center gap-1"
+            className="flex-1 py-2 rounded-xl text-xs font-bold transition-colors duration-200 text-center flex items-center justify-center gap-1 relative z-10 touch-press cursor-pointer"
             style={{
-              background: activeTab === "products" ? "#6B3A2A" : "transparent",
               color: activeTab === "products" ? "white" : "#8B4513",
             }}
           >
@@ -211,9 +238,8 @@ export default function ArtisanDashboard({
           <button
             type="button"
             onClick={() => setActiveTab("orders")}
-            className="flex-1 py-2 rounded-xl text-xs font-bold transition-all text-center flex items-center justify-center gap-1 relative"
+            className="flex-1 py-2 rounded-xl text-xs font-bold transition-colors duration-200 text-center flex items-center justify-center gap-1 relative z-10 touch-press cursor-pointer"
             style={{
-              background: activeTab === "orders" ? "#6B3A2A" : "transparent",
               color: activeTab === "orders" ? "white" : "#8B4513",
             }}
           >
@@ -229,9 +255,8 @@ export default function ArtisanDashboard({
           <button
             type="button"
             onClick={() => setActiveTab("earnings")}
-            className="flex-1 py-2 rounded-xl text-xs font-bold transition-all text-center flex items-center justify-center gap-1"
+            className="flex-1 py-2 rounded-xl text-xs font-bold transition-colors duration-200 text-center flex items-center justify-center gap-1 relative z-10 touch-press cursor-pointer"
             style={{
-              background: activeTab === "earnings" ? "#6B3A2A" : "transparent",
               color: activeTab === "earnings" ? "white" : "#8B4513",
             }}
           >
@@ -282,17 +307,24 @@ export default function ArtisanDashboard({
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-2.5">
-                  {inventory.map((item) => (
+                  {inventory.map((item, idx) => (
                     <div
                       key={item.id}
                       onClick={() => onPreviewProduct(item)}
-                      className="rounded-2xl overflow-hidden bg-white shadow-xs border flex flex-col cursor-pointer transition-all hover:shadow-md"
-                      style={{ borderColor: "rgba(196,136,107,0.25)" }}
+                      className="rounded-2xl overflow-hidden bg-white shadow-xs border flex flex-col cursor-pointer transition-all hover:shadow-md touch-press animate-card-enter"
+                      style={{
+                        borderColor: "rgba(196,136,107,0.25)",
+                        animationDelay: `${Math.min(idx * 50, 300)}ms`,
+                      }}
                     >
                       <div className="relative h-32 bg-[#F0EBE3] overflow-hidden">
-                        <img src={item.imageUrl} alt={item.title_en} className="w-full h-full object-cover" />
-                        <div className="absolute top-1.5 left-1.5 bg-white/95 px-1.5 py-0.5 rounded text-[8px] font-bold text-[#6B3A2A]">
-                          {t("ondc_active")}
+                        <img src={item.imageUrl} alt={item.title_en} className="w-full h-full object-cover transition-transform duration-300 hover:scale-105" />
+                        <div
+                          className="absolute top-1.5 left-1.5 bg-white/95 px-1.5 py-0.5 rounded text-[8px] font-bold text-[#6B3A2A] flex items-center gap-1 shadow-2xs"
+                          title={t("ondc_ready_tooltip")}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          <span>{t("ondc_staging_badge")}</span>
                         </div>
                         <button
                           type="button"
@@ -300,7 +332,7 @@ export default function ArtisanDashboard({
                             e.stopPropagation();
                             setSelectedCertItem(item);
                           }}
-                          className="absolute top-1.5 right-1.5 bg-amber-100 text-amber-900 border border-amber-300 text-[8px] font-bold px-1.5 py-0.5 rounded shadow-xs"
+                          className="absolute top-1.5 right-1.5 bg-amber-100 text-amber-900 border border-amber-300 text-[8px] font-bold px-1.5 py-0.5 rounded shadow-xs touch-press"
                           title="View Digital Certificate"
                         >
                           📜 {t("certified_badge")}
@@ -330,11 +362,14 @@ export default function ArtisanDashboard({
                                 e.stopPropagation();
                                 onDecreaseQty(item.id);
                               }}
-                              className="w-4 h-4 rounded bg-white text-[#6B3A2A] font-bold text-xs flex items-center justify-center shadow-2xs active:scale-90"
+                              className="w-4 h-4 rounded bg-white text-[#6B3A2A] font-bold text-xs flex items-center justify-center shadow-2xs touch-press"
                             >
                               −
                             </button>
-                            <span className="font-bold text-xs text-[#3D1F0F] min-w-3 text-center">
+                            <span
+                              key={item.quantity}
+                              className="font-bold text-xs text-[#3D1F0F] min-w-3 text-center inline-block animate-badge-bump"
+                            >
                               {item.quantity || 1}
                             </span>
                             <button
@@ -343,7 +378,7 @@ export default function ArtisanDashboard({
                                 e.stopPropagation();
                                 onIncreaseQty(item.id);
                               }}
-                              className="w-4 h-4 rounded bg-[#6B3A2A] text-white font-bold text-xs flex items-center justify-center shadow-2xs active:scale-90"
+                              className="w-4 h-4 rounded bg-[#6B3A2A] text-white font-bold text-xs flex items-center justify-center shadow-2xs touch-press"
                             >
                               ＋
                             </button>
@@ -356,7 +391,7 @@ export default function ArtisanDashboard({
                             e.stopPropagation();
                             onRemoveProduct(item.id);
                           }}
-                          className="w-full mt-2 py-0.8 rounded text-[10px] font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 flex items-center justify-center gap-1 active:scale-95"
+                          className="w-full mt-2 py-0.8 rounded text-[10px] font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 flex items-center justify-center gap-1 touch-press"
                         >
                           🗑️ {t("remove_product")}
                         </button>
@@ -387,7 +422,7 @@ export default function ArtisanDashboard({
                 </button>
               </div>
 
-              {orders.map((ord) => {
+              {orders.map((ord, idx) => {
                 const matchedItem = inventory.find(
                   (inv) =>
                     inv.suggested_price === ord.amount ||
@@ -400,7 +435,11 @@ export default function ArtisanDashboard({
                   : ord.productTitle;
 
                 return (
-                  <div key={ord.orderId} className="rounded-2xl p-3 bg-white border border-[#EAC9B0] shadow-xs space-y-2">
+                  <div
+                    key={ord.orderId}
+                    className="rounded-2xl p-3 bg-white border border-[#EAC9B0] shadow-xs space-y-2 animate-card-enter"
+                    style={{ animationDelay: `${Math.min(idx * 60, 300)}ms` }}
+                  >
                     <div className="flex items-center justify-between border-b border-stone-100 pb-2">
                       <div>
                         <span className="text-xs font-bold text-[#3D1F0F]">{displayTitle}</span>
@@ -432,7 +471,7 @@ export default function ArtisanDashboard({
                         <button
                           type="button"
                           onClick={() => handleDispatch(ord.orderId)}
-                          className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs active:scale-95 transition"
+                          className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs touch-press transition"
                         >
                           {t("pack_and_dispatch")}
                         </button>
@@ -450,10 +489,12 @@ export default function ArtisanDashboard({
 
           {/* TAB 3: EARNINGS */}
           {activeTab === "earnings" && (
-            <div className="space-y-3">
+            <div className="space-y-3 animate-fade-in">
               <div className="rounded-2xl p-4 text-white space-y-2" style={{ background: "linear-gradient(135deg, #6B3A2A 0%, #3D1F0F 100%)" }}>
                 <p className="text-[10px] text-white/75 uppercase tracking-wider">{t("net_payout")}</p>
-                <h2 className="text-3xl font-extrabold">₹{earnings.artisanShare}</h2>
+                <h2 className="text-3xl font-extrabold">
+                  <AnimatedNumber value={earnings.artisanShare} prefix="₹" duration={450} />
+                </h2>
                 <div className="flex items-center justify-between text-[11px] pt-1 border-t border-white/20">
                   <span>{t("jan_dhan_bank")}</span>
                   <span className="bg-emerald-500/30 text-emerald-300 px-2 py-0.5 rounded font-bold">{t("settled_24hrs")}</span>
@@ -464,6 +505,26 @@ export default function ArtisanDashboard({
                 <h4 className="text-xs font-bold text-[#3D1F0F] uppercase tracking-wider">
                   {t("direct_impact_title")}
                 </h4>
+
+                {/* 85% Jan Dhan Visual Breakdown Bar */}
+                <div className="w-full h-2 rounded-full bg-stone-100 overflow-hidden flex my-2 shadow-inner">
+                  <div
+                    className="h-full bg-emerald-600 transition-all duration-700 ease-out"
+                    style={{ width: "85%" }}
+                    title="85% Direct to Artisan Jan Dhan Account"
+                  />
+                  <div
+                    className="h-full bg-blue-500 transition-all duration-700 ease-out"
+                    style={{ width: "10%" }}
+                    title="10% India Post Logistics"
+                  />
+                  <div
+                    className="h-full bg-amber-500 transition-all duration-700 ease-out"
+                    style={{ width: "5%" }}
+                    title="5% ONDC Network Maintenance"
+                  />
+                </div>
+
                 <div className="space-y-1.5 text-xs">
                   <div className="flex justify-between text-emerald-800 font-semibold">
                     <span>{t("artisan_share_85")}</span>
@@ -479,8 +540,15 @@ export default function ArtisanDashboard({
                   </div>
                   <div className="border-t border-stone-100 pt-1.5 flex justify-between font-extrabold text-[#3D1F0F]">
                     <span>{t("gross_sales")}</span>
-                    <span>₹{earnings.grossSales}</span>
+                    <span><AnimatedNumber value={earnings.grossSales} prefix="₹" duration={450} /></span>
                   </div>
+                </div>
+
+                <div className="pt-2 border-t border-dashed border-[#EAC9B0] flex items-center justify-between text-[11px]">
+                  <span className="text-stone-500">{t("settlement_status")}</span>
+                  <span className="font-semibold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-200 text-[10px]">
+                    {t("settlement_staging_pending")}
+                  </span>
                 </div>
               </div>
             </div>
@@ -489,8 +557,8 @@ export default function ArtisanDashboard({
 
         {/* ── Modal for KalaPramaan Digital Certificate ── */}
         {selectedCertItem && (
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-            <div className="bg-[#FFFDF9] rounded-3xl p-5 w-full max-w-xs border-2 border-[#C4886B] shadow-2xl space-y-3 relative">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
+            <div className="bg-[#FFFDF9] rounded-3xl p-5 w-full max-w-xs border-2 border-[#C4886B] shadow-2xl space-y-3 relative animate-scale-in">
               <button
                 type="button"
                 onClick={() => setSelectedCertItem(null)}
