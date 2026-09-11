@@ -44,8 +44,8 @@ export function transformToOndcCatalog(product: StoreItem, action: "on_search" |
                 descriptor: {
                   name: product.title_en || product.title_hi,
                   code: product.title_hi,
-                  short_desc: product.quick_summary_en || product.description_en,
-                  long_desc: product.quick_summary_hi || product.description_hi,
+                  short_desc: product.quick_summary_en || product.quick_summary_hi || product.story_en,
+                  long_desc: product.quick_summary_hi || product.story_hi || product.quick_summary_en,
                   images: [product.imageUrl],
                 },
                 price: {

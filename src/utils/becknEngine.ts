@@ -109,7 +109,7 @@ export function executeBecknSearch(query: string, inventory: StoreItem[]) {
               descriptor: {
                 name: item.title_en || item.title_hi,
                 code: item.title_hi,
-                short_desc: item.quick_summary_hi || item.description_hi,
+                short_desc: item.quick_summary_hi || item.quick_summary_en || item.story_hi,
                 images: [item.imageUrl],
               },
               price: {

@@ -1,5 +1,6 @@
 // src/OndcBuyerScreen.tsx
 import React, { useState, useEffect } from "react";
+import { useLanguage } from "./context/LanguageContext";
 import { StoreItem } from "./App";
 import {
   CartItem,
@@ -22,6 +23,7 @@ export default function OndcBuyerScreen({
   onOrderConfirmed,
   onLogout,
 }: OndcBuyerScreenProps) {
+  const { t } = useLanguage();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<StoreItem | null>(null);
   const [selectedQty, setSelectedQty] = useState(1);
@@ -353,7 +355,7 @@ export default function OndcBuyerScreen({
           <div className="relative mt-2">
             <input
               type="text"
-              placeholder="हस्तशिल्प, पेंटिंग, मिट्टी, wood खोजें..."
+              placeholder={t("search_placeholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full py-2.5 pl-9 pr-8 rounded-xl bg-white text-slate-800 text-xs outline-none shadow-inner font-medium"
@@ -384,9 +386,9 @@ export default function OndcBuyerScreen({
         <div className="flex-1 overflow-y-auto p-4 space-y-3" style={{ scrollbarWidth: "none", paddingBottom: 110 }}>
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-              सीधे ग्रामीण कारीगरों से (Direct from Artisans)
+              {t("direct_from_artisans")}
             </h3>
-            <span className="text-[11px] text-slate-500">{filteredProducts.length} उपलब्ध</span>
+            <span className="text-[11px] text-slate-500">{filteredProducts.length} {t("available")}</span>
           </div>
 
           {filteredProducts.length === 0 ? (
@@ -429,7 +431,7 @@ export default function OndcBuyerScreen({
                             : "bg-white/90 text-purple-900"
                         }`}
                       >
-                        {isOutOfStock ? "स्टॉक समाप्त" : `स्टॉक: ${stock} पीस`}
+                        {isOutOfStock ? t("out_of_stock") : `${t("stock_count")}: ${stock}`}
                       </span>
                     </div>
 
@@ -444,7 +446,7 @@ export default function OndcBuyerScreen({
                         <div className="flex items-baseline gap-1 mt-1">
                           <span className="text-xs font-extrabold text-slate-900">₹{item.suggested_price}</span>
                           <span className="text-[9px] text-emerald-700 bg-emerald-50 px-1 rounded font-bold">
-                            40% बचत
+                            {t("savings_badge")}
                           </span>
                         </div>
                       </div>
@@ -472,7 +474,7 @@ export default function OndcBuyerScreen({
                           }}
                         >
                           <span>🛒 </span>
-                          <span>{isOutOfStock ? "स्टॉक समाप्त" : "कार्ट में जोड़ें"}</span>
+                          <span>{isOutOfStock ? t("out_of_stock") : t("add_to_cart")}</span>
                         </button>
                       </div>
                     </div>
@@ -538,7 +540,7 @@ export default function OndcBuyerScreen({
                 className="text-base font-bold tracking-wide"
                 style={{ fontFamily: "'Noto Serif', serif" }}
               >
-                उत्पाद विवरण (Details)
+                {t("product_details_header")}
               </h2>
               <div className="w-9" />
             </div>
@@ -555,7 +557,7 @@ export default function OndcBuyerScreen({
                   className="w-full h-full object-cover"
                 />
                 <div className="absolute top-3 left-3 bg-white/95 px-2.5 py-1 rounded-full text-xs font-bold text-[#5B21B6] shadow-xs">
-                  ✓ ONDC प्रमाणित
+                  {t("ondc_certified_seal")}
                 </div>
                 <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-xs text-white text-xs font-medium px-3 py-1 rounded-full">
                   📍 {viewingDetailsProduct.artisan_region || "भारत"}
@@ -577,7 +579,7 @@ export default function OndcBuyerScreen({
                     </p>
                   </div>
                   <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg flex-shrink-0">
-                    40% बचत
+                    {t("savings_badge")}
                   </span>
                 </div>
 
@@ -589,7 +591,7 @@ export default function OndcBuyerScreen({
                     ₹{Math.round((Number(viewingDetailsProduct.suggested_price) || 199) * 1.4)}
                   </span>
                   <span className="text-xs text-stone-500 font-medium ml-auto">
-                    उपलब्ध स्टॉक: {Math.max(0, Number(viewingDetailsProduct.quantity ?? 0))} पीस
+                    {t("stock_available_pcs").replace("{count}", String(Math.max(0, Number(viewingDetailsProduct.quantity ?? 0))))}
                   </span>
                 </div>
               </div>
@@ -601,7 +603,7 @@ export default function OndcBuyerScreen({
                 </div>
                 <div className="flex-1">
                   <p className="text-[10px] text-purple-700 font-bold uppercase tracking-wider">
-                    हस्तशिल्प निर्माता
+                    {t("artisan_maker_title")}
                   </p>
                   <h4
                     className="text-sm font-bold text-stone-900"
@@ -622,7 +624,7 @@ export default function OndcBuyerScreen({
                   style={{ fontFamily: "'Noto Serif', serif" }}
                 >
                   <span>📜</span>
-                  <span>सामान की जानकारी (Description)</span>
+                  <span>{t("item_description_title")}</span>
                 </h4>
                 <p className="text-xs text-stone-700 leading-relaxed">
                   {viewingDetailsProduct.quick_summary_hi || "पारंपरिक हस्तनिर्मित प्रामाणिक उत्पाद।"}
@@ -641,7 +643,7 @@ export default function OndcBuyerScreen({
                     className="text-sm font-bold text-stone-900"
                     style={{ fontFamily: "'Noto Serif', serif" }}
                   >
-                    विशेषताएं (Specifications)
+                    {t("key_highlights_title")}
                   </h4>
                   <div className="flex bg-purple-100/70 p-0.5 rounded-lg text-[10px] font-bold">
                     <button
@@ -682,7 +684,7 @@ export default function OndcBuyerScreen({
                     </div>
                   )) || (
                     <p className="text-xs text-stone-400 py-2">
-                      हस्तशिल्प विवरण उपलब्ध है।
+                      {t("specs_not_available")}
                     </p>
                   )}
                 </div>
@@ -692,7 +694,7 @@ export default function OndcBuyerScreen({
             {/* बॉटम स्टिकी बार */}
             <div className="absolute bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-purple-100 flex items-center gap-3 shadow-lg">
               <div>
-                <p className="text-[10px] text-stone-400 uppercase font-semibold">मूल्य</p>
+                <p className="text-[10px] text-stone-400 uppercase font-semibold">{t("price_label")}</p>
                 <p className="text-lg font-black text-[#5B21B6]">
                   ₹{viewingDetailsProduct.suggested_price}
                 </p>
@@ -722,8 +724,8 @@ export default function OndcBuyerScreen({
                 <span>🛒</span>
                 <span>
                   {Number(viewingDetailsProduct.quantity || 0) <= 0
-                    ? "स्टॉक समाप्त (Out of Stock)"
-                    : "कार्ट में जोड़ें (Add to Cart)"}
+                    ? t("out_of_stock")
+                    : t("add_to_cart")}
                 </span>
               </button>
             </div>
@@ -743,7 +745,7 @@ export default function OndcBuyerScreen({
                   />
                   <div>
                     <h3 className="text-sm font-bold text-slate-900">{selectedProduct.title_hi}</h3>
-                    <p className="text-xs text-slate-500">कारीगर: {selectedProduct.artisan_name}</p>
+                    <p className="text-xs text-slate-500">{t("artisan_label")} {selectedProduct.artisan_name}</p>
                     <p className="text-sm font-extrabold text-emerald-700 mt-0.5">
                       ₹{selectedProduct.suggested_price}
                     </p>
@@ -761,10 +763,10 @@ export default function OndcBuyerScreen({
               {/* Quantity Selector Section */}
               <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-200">
                 <div>
-                  <p className="text-xs font-bold text-slate-800">खरीदने की मात्रा (Quantity):</p>
+                  <p className="text-xs font-bold text-slate-800">{t("buy_qty_label")}</p>
                   <p className="text-[10px] text-slate-500">
-                    उपलब्ध स्टॉक: {activeStockInfo.sellerStock} पीस
-                    {activeStockInfo.inCartQty > 0 && ` (${activeStockInfo.inCartQty} पहले से कार्ट में)`}
+                    {t("stock_available_pcs").replace("{count}", String(activeStockInfo.sellerStock))}
+                    {activeStockInfo.inCartQty > 0 && ` (${activeStockInfo.inCartQty} ${t("already_in_cart")})`}
                   </p>
                 </div>
 
@@ -805,7 +807,7 @@ export default function OndcBuyerScreen({
               </div>
 
               <div className="flex justify-between items-center text-xs font-semibold text-slate-600 px-1">
-                <span>कुल मूल्य ({selectedQty} पीस):</span>
+                <span>{t("total_price_label").replace("{qty}", String(selectedQty))}</span>
                 <span className="text-base font-extrabold text-slate-900">
                   ₹{(Number(selectedProduct.suggested_price) || 199) * selectedQty}
                 </span>
@@ -832,8 +834,8 @@ export default function OndcBuyerScreen({
                 <span>🛒 </span>
                 <span>
                   {activeStockInfo.availableToAdd <= 0
-                    ? "स्टॉक समाप्त (Out of Stock)"
-                    : "कार्ट में जोड़ें (Add to Cart)"}
+                    ? t("out_of_stock")
+                    : t("add_to_cart")}
                 </span>
               </button>
             </div>
@@ -864,9 +866,9 @@ export default function OndcBuyerScreen({
                   <div className="w-16 h-16 mx-auto rounded-full bg-purple-50 flex items-center justify-center text-3xl">
                     🛒
                   </div>
-                  <h4 className="text-base font-bold text-slate-800">आपकी कार्ट खाली है</h4>
+                  <h4 className="text-base font-bold text-slate-800">{t("empty_cart_title")}</h4>
                   <p className="text-xs text-slate-500 max-w-xs mx-auto">
-                    कृपया कारीगरों द्वारा बनाए गए प्रामाणिक हस्तशिल्प देखें और अपनी कार्ट में जोड़ें।
+                    {t("empty_cart_desc")}
                   </p>
                   <button
                     type="button"
@@ -874,7 +876,7 @@ export default function OndcBuyerScreen({
                     className="mt-3 px-6 py-2.5 rounded-xl text-xs font-bold text-white shadow-md cursor-pointer"
                     style={{ background: "linear-gradient(135deg, #7C3AED 0%, #5B21B6 100%)" }}
                   >
-                    खरीदारी शुरू करें (Start Shopping)
+                    {t("start_shopping")}
                   </button>
                 </div>
               ) : (
@@ -939,7 +941,7 @@ export default function OndcBuyerScreen({
                       </span>
                     </div>
                     <div className="flex justify-between font-extrabold text-slate-900 text-sm border-t border-purple-200/80 pt-1">
-                      <span>कुल देय राशि</span>
+                      <span>{t("total_payable")}</span>
                       <span>₹{cartQuote.totalPrice}</span>
                     </div>
                   </div>
@@ -957,7 +959,7 @@ export default function OndcBuyerScreen({
                     }}
                   >
                     <span>📍 </span>
-                    <span>डिलीवरी पता चुनें और आगे बढ़ें ➔</span>
+                    <span>{t("proceed_delivery")}</span>
                   </button>
                 </>
               )}
@@ -1109,7 +1111,7 @@ export default function OndcBuyerScreen({
                 }}
               >
                 <span>⚡</span>
-                <span>UPI से पेमेंट करें और आर्डर दें (Pay ₹{cartQuote.totalPrice})</span>
+                <span>{t("pay_order_upi")} (Pay ₹{cartQuote.totalPrice})</span>
               </button>
             </div>
           </div>

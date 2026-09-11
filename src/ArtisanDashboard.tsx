@@ -1,6 +1,7 @@
 // src/ArtisanDashboard.tsx
 import React, { useState } from "react";
 import { StoreItem } from "./App";
+import { useLanguage } from "./context/LanguageContext";
 
 export interface OrderItem {
   orderId: string;
@@ -40,6 +41,7 @@ export default function ArtisanDashboard({
   onSwitchToBuyer,
   onLogout,
 }: ArtisanDashboardProps) {
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<"products" | "orders" | "earnings">("products");
   const [selectedCertItem, setSelectedCertItem] = useState<StoreItem | null>(null);
 
@@ -153,7 +155,7 @@ export default function ArtisanDashboard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
               <h1 className="text-base font-bold text-white tracking-wide truncate" style={{ fontFamily: "'Noto Serif', serif" }}>
-                मेरी दुकान
+                {t("my_store")}
               </h1>
               <span className="text-[9px] bg-emerald-500/25 text-emerald-300 font-bold px-1.5 py-0.5 rounded border border-emerald-400/30">
                 Node #412
@@ -168,16 +170,16 @@ export default function ArtisanDashboard({
             className="px-2 py-1 rounded-xl text-[10px] font-bold text-amber-900 bg-amber-200 hover:bg-amber-300 shadow-xs active:scale-95 border border-amber-400"
             title="Simulate PhonePe Buyer Order"
           >
-            ⚡ टेस्ट आर्डर
+            ⚡ {t("test_order")}
           </button>
 
           <button
             type="button"
             onClick={onLogout}
             className="px-2 py-1 rounded-xl text-[10px] font-bold text-white bg-red-900/60 border border-red-400/40 active:scale-95 transition"
-            title="लॉगआउट"
+            title={t("logout")}
           >
-            लॉगआउट
+            {t("logout")}
           </button>
         </div>
 
@@ -193,7 +195,7 @@ export default function ArtisanDashboard({
             }}
           >
             <span>🏺</span>
-            <span>सामान ({inventory.length})</span>
+            <span>{t("tab_products")} ({inventory.length})</span>
           </button>
 
           <button
@@ -206,7 +208,7 @@ export default function ArtisanDashboard({
             }}
           >
             <span>📦</span>
-            <span>आर्डर</span>
+            <span>{t("tab_orders")}</span>
             {pendingOrders > 0 && (
               <span className="w-4 h-4 rounded-full bg-red-600 text-white text-[9px] flex items-center justify-center">
                 {pendingOrders}
@@ -224,7 +226,7 @@ export default function ArtisanDashboard({
             }}
           >
             <span>💰</span>
-            <span>कमाई (₹{totalRevenue})</span>
+            <span>{t("tab_earnings")} (₹{totalRevenue})</span>
           </button>
         </div>
 
@@ -241,13 +243,13 @@ export default function ArtisanDashboard({
                 }}
               >
                 <div>
-                  <p className="text-[10px] font-bold text-[#8B4513] uppercase">स्टॉक एवं उपलब्धता</p>
+                  <p className="text-[10px] font-bold text-[#8B4513] uppercase">{t("stock_availability")}</p>
                   <h2 className="text-xl font-extrabold text-[#3D1F0F]" style={{ fontFamily: "'Noto Serif', serif" }}>
-                    {inventory.length} प्रकार ({totalUnits} पीस स्टॉक)
+                    {t("types_stock_count").replace("{types}", String(inventory.length)).replace("{pieces}", String(totalUnits))}
                   </h2>
                   <p className="text-[10px] text-emerald-700 font-semibold mt-0.5 flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    Paytm व PhonePe पर लाइव बिक्री चालू
+                    {t("live_on_platforms")}
                   </p>
                 </div>
                 <div className="w-10 h-10 rounded-2xl bg-[#6B3A2A] text-white flex items-center justify-center text-lg shadow-sm">
@@ -257,16 +259,16 @@ export default function ArtisanDashboard({
 
               <div className="flex items-center justify-between pt-1">
                 <span className="text-xs font-bold text-[#3D1F0F]" style={{ fontFamily: "'Noto Serif', serif" }}>
-                  कारीगरी कैटलॉग (Inventory)
+                  {t("craft_catalog_title")}
                 </span>
-                <span className="text-[11px] text-[#9C6644]">स्टॉक बदलें या हटाएं</span>
+                <span className="text-[11px] text-[#9C6644]">{t("stock_action_hint")}</span>
               </div>
 
               {inventory.length === 0 ? (
                 <div className="text-center py-12">
                   <div className="text-4xl mb-2">📦</div>
-                  <h4 className="font-bold text-[#3D1F0F]">कोई सामान नहीं है</h4>
-                  <p className="text-xs text-[#9C6644] mt-1">नीचे दिए बटन से पहला सामान जोड़ें!</p>
+                  <h4 className="font-bold text-[#3D1F0F]">{t("no_products")}</h4>
+                  <p className="text-xs text-[#9C6644] mt-1">{t("add_first_product_hint")}</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-2.5">
@@ -280,7 +282,7 @@ export default function ArtisanDashboard({
                       <div className="relative h-32 bg-[#F0EBE3] overflow-hidden">
                         <img src={item.imageUrl} alt={item.title_en} className="w-full h-full object-cover" />
                         <div className="absolute top-1.5 left-1.5 bg-white/95 px-1.5 py-0.5 rounded text-[8px] font-bold text-[#6B3A2A]">
-                          ONDC Active
+                          {t("ondc_active")}
                         </div>
                         <button
                           type="button"
@@ -291,7 +293,7 @@ export default function ArtisanDashboard({
                           className="absolute top-1.5 right-1.5 bg-amber-100 text-amber-900 border border-amber-300 text-[8px] font-bold px-1.5 py-0.5 rounded shadow-xs"
                           title="View Digital Certificate"
                         >
-                          📜 प्रमाण
+                          📜 {t("certified_badge")}
                         </button>
                       </div>
 
@@ -303,12 +305,12 @@ export default function ArtisanDashboard({
                           <p className="text-[10px] text-[#8B4513] line-clamp-1 mt-0.5">{item.title_en}</p>
                           <div className="flex items-baseline gap-1 mt-1">
                             <span className="text-sm font-extrabold text-[#3D1F0F]">₹{item.suggested_price}</span>
-                            <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1 rounded">40% बचत</span>
+                            <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1 rounded">{t("savings_badge")}</span>
                           </div>
                         </div>
 
                         <div className="mt-2 pt-2 border-t border-stone-100 flex items-center justify-between">
-                          <span className="text-[10px] font-semibold text-[#8B4513]">मात्रा:</span>
+                          <span className="text-[10px] font-semibold text-[#8B4513]">{t("quantity_label")}</span>
                           <div className="flex items-center gap-1 bg-[#FFF0E5] px-1 py-0.5 rounded border border-[#EAC9B0]">
                             <button
                               type="button"
@@ -344,7 +346,7 @@ export default function ArtisanDashboard({
                           }}
                           className="w-full mt-2 py-0.8 rounded text-[10px] font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 flex items-center justify-center gap-1 active:scale-95"
                         >
-                          🗑️ हटाएं (Remove)
+                          🗑️ {t("remove_product")}
                         </button>
                       </div>
                     </div>
@@ -360,16 +362,16 @@ export default function ArtisanDashboard({
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-bold text-[#3D1F0F]" style={{ fontFamily: "'Noto Serif', serif" }}>
-                    ONDC लाइव आर्डर सूची
+                    {t("ondc_live_orders")}
                   </h3>
-                  <p className="text-[10px] text-[#9C6644]">PhonePe, Paytm और Magicpin से प्राप्त आर्डर</p>
+                  <p className="text-[10px] text-[#9C6644]">{t("orders_from_platforms")}</p>
                 </div>
                 <button
                   type="button"
                   onClick={handleSimulateBuyerOrder}
                   className="px-2 py-1 rounded-lg text-[10px] font-bold bg-[#6B3A2A] text-white active:scale-95"
                 >
-                  ＋ टेस्ट आर्डर
+                  ＋ {t("test_order")}
                 </button>
               </div>
 
@@ -400,11 +402,11 @@ export default function ArtisanDashboard({
                         onClick={() => handleDispatch(ord.orderId)}
                         className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs active:scale-95 transition"
                       >
-                        ✓ पैक करें व कूरियर बुलाएं
+                        {t("pack_and_dispatch")}
                       </button>
                     ) : (
                       <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-stone-100 text-stone-600 border border-stone-200">
-                        📦 कूरियर को सौंपा गया (Dispatched)
+                        {t("dispatched_courier")}
                       </span>
                     )}
                   </div>
@@ -417,33 +419,33 @@ export default function ArtisanDashboard({
           {activeTab === "earnings" && (
             <div className="space-y-3">
               <div className="rounded-2xl p-4 text-white space-y-2" style={{ background: "linear-gradient(135deg, #6B3A2A 0%, #3D1F0F 100%)" }}>
-                <p className="text-[10px] text-white/75 uppercase tracking-wider">कुल शुद्ध आय (Net Payout)</p>
+                <p className="text-[10px] text-white/75 uppercase tracking-wider">{t("net_payout")}</p>
                 <h2 className="text-3xl font-extrabold">₹{Math.round(totalRevenue * 0.85)}</h2>
                 <div className="flex items-center justify-between text-[11px] pt-1 border-t border-white/20">
-                  <span>बैंक: जन-धन बचत खाता (DBT)</span>
-                  <span className="bg-emerald-500/30 text-emerald-300 px-2 py-0.5 rounded font-bold">24 घंटे में जमा</span>
+                  <span>{t("jan_dhan_bank")}</span>
+                  <span className="bg-emerald-500/30 text-emerald-300 px-2 py-0.5 rounded font-bold">{t("settled_24hrs")}</span>
                 </div>
               </div>
 
               <div className="rounded-2xl p-3.5 bg-white border border-[#EAC9B0] space-y-2.5">
                 <h4 className="text-xs font-bold text-[#3D1F0F] uppercase tracking-wider">
-                  पारदर्शी भुगतान ब्रेकडाउन (Direct Impact)
+                  {t("direct_impact_title")}
                 </h4>
                 <div className="space-y-1.5 text-xs">
                   <div className="flex justify-between text-emerald-800 font-semibold">
-                    <span>कारीगर को सीधा हिस्सा (85%)</span>
+                    <span>{t("artisan_share_85")}</span>
                     <span>₹{Math.round(totalRevenue * 0.85)}</span>
                   </div>
                   <div className="flex justify-between text-stone-500">
-                    <span>India Post डाक घर डिलीवरी (10%)</span>
+                    <span>{t("india_post_delivery_10")}</span>
                     <span>₹{Math.round(totalRevenue * 0.1)}</span>
                   </div>
                   <div className="flex justify-between text-stone-500">
-                    <span>ONDC नेटवर्क रखरखाव (5%)</span>
+                    <span>{t("ondc_network_maintenance_5")}</span>
                     <span>₹{Math.round(totalRevenue * 0.05)}</span>
                   </div>
                   <div className="border-t border-stone-100 pt-1.5 flex justify-between font-extrabold text-[#3D1F0F]">
-                    <span>कुल ग्रॉस बिक्री (Gross Sales)</span>
+                    <span>{t("gross_sales")}</span>
                     <span>₹{totalRevenue}</span>
                   </div>
                 </div>
@@ -467,27 +469,27 @@ export default function ArtisanDashboard({
               <div className="text-center space-y-1 border-b pb-3 border-[#EAC9B0]">
                 <span className="text-2xl">🏛️</span>
                 <h3 className="font-bold text-sm text-[#3D1F0F]" style={{ fontFamily: "'Noto Serif', serif" }}>
-                  कलाप्रमाण (KalaPramaan)
+                  {t("kalapramaan_title")}
                 </h3>
-                <p className="text-[10px] text-[#8B4513] font-semibold">डिजिटल हस्तशिल्प प्रामाणिकता प्रमाणपत्र</p>
+                <p className="text-[10px] text-[#8B4513] font-semibold">{t("kalapramaan_subtitle")}</p>
               </div>
 
               <div className="space-y-1.5 text-xs text-[#5A2E12]">
                 <div className="flex justify-between">
-                  <span className="text-stone-400">उत्पाद:</span>
+                  <span className="text-stone-400">{t("cert_product")}</span>
                   <span className="font-bold">{selectedCertItem.title_hi}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-stone-400">कारीगर:</span>
+                  <span className="text-stone-400">{t("cert_artisan")}</span>
                   <span className="font-bold">{selectedCertItem.artisan_name || "माधुरी देवी"}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-stone-400">क्षेत्र:</span>
+                  <span className="text-stone-400">{t("cert_region")}</span>
                   <span className="font-bold">{selectedCertItem.artisan_region || "मिथिला, बिहार"}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-stone-400">GI स्टेटस:</span>
-                  <span className="font-bold text-emerald-700">सत्यापित प्रामाणिक हस्तकला</span>
+                  <span className="text-stone-400">{t("cert_gi_status")}</span>
+                  <span className="font-bold text-emerald-700">{t("cert_gi_verified")}</span>
                 </div>
               </div>
             </div>
@@ -509,7 +511,7 @@ export default function ArtisanDashboard({
             }}
           >
             <span className="text-lg">＋</span>
-            <span style={{ fontFamily: "'Noto Serif', serif" }}>नया सामान जोड़ें (Add Product)</span>
+            <span style={{ fontFamily: "'Noto Serif', serif" }}>{t("add_product_to_shop")}</span>
           </button>
         </div>
       </div>

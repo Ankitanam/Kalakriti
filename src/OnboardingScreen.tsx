@@ -1,5 +1,7 @@
 // src/OnboardingScreen.tsx
 import { useState } from "react";
+import { useLanguage } from "./context/LanguageContext";
+import { LanguageModal } from "./components/LanguageModal";
 
 type Stage = "landing" | "otp";
 export type UserRole = "seller" | "buyer";
@@ -15,6 +17,10 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
   const [mobile, setMobile] = useState("");
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [focusedOtp, setFocusedOtp] = useState<number | null>(null);
+
+  // 🌐 Multilingual Language Hook & Modal State
+  const { t, currentLang } = useLanguage();
+  const [showLangModal, setShowLangModal] = useState(false);
 
   const isBuyer = role === "buyer";
 
@@ -138,9 +144,20 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
                 </div>
               </div>
 
+              {/* 🌐 Flipkart-Style Floating Language Switcher Button */}
+              <button
+                type="button"
+                onClick={() => setShowLangModal(true)}
+                className="absolute top-4 right-4 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-white bg-black/40 backdrop-blur-md border border-white/30 shadow-md active:scale-95 transition cursor-pointer"
+              >
+                <span>🌐</span>
+                <span>{currentLang.toUpperCase()}</span>
+                <span className="text-[10px]">▾</span>
+              </button>
+
               {/* ONDC Badge top-right */}
               <div
-                className="absolute top-4 right-5 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold shadow-md z-10 bg-white/95"
+                className="absolute top-13 right-4 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold shadow-md z-10 bg-white/95"
                 style={{ color: theme.primary, border: `1px solid ${theme.border}` }}
               >
                 <span>✨</span>
@@ -175,7 +192,7 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
                   }}
                 >
                   <span>🏺</span>
-                  <span>मैं कारीगर हूँ (Seller)</span>
+                  <span>{t("artisan_role")}</span>
                 </button>
                 <button
                   type="button"
@@ -188,7 +205,7 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
                   }}
                 >
                   <span>🛍️</span>
-                  <span>मैं खरीदार हूँ (Buyer)</span>
+                  <span>{t("buyer_role")}</span>
                 </button>
               </div>
 
@@ -198,12 +215,10 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
                   className="text-2xl font-bold leading-tight mb-1"
                   style={{ color: theme.textDark, fontFamily: "'Noto Serif', serif" }}
                 >
-                  {isBuyer ? "हस्तकला बाज़ार में आपका स्वागत है" : "कलाकृति में आपका स्वागत है"}
+                  {isBuyer ? t("welcome_buyer_title") : t("welcome_title")}
                 </h1>
                 <p className="text-xs leading-relaxed" style={{ color: theme.textMuted }}>
-                  {isBuyer
-                    ? "Paytm व PhonePe जैसे ONDC नेटवर्क से सीधे ग्रामीण कारीगरों से खरीदें"
-                    : "अपनी कला को सीधे देश भर के बाज़ार और ONDC नेटवर्क से जोड़ें"}
+                  {isBuyer ? t("welcome_buyer_subtitle") : t("welcome_subtitle")}
                 </p>
               </div>
 
@@ -213,7 +228,7 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
                   className="block text-[11px] font-bold mb-1.5 uppercase tracking-wider"
                   style={{ color: theme.primary }}
                 >
-                  मोबाइल नंबर
+                  {t("mobile_label")}
                 </label>
                 <div
                   className="flex items-center rounded-2xl overflow-hidden transition-all duration-200"
@@ -241,7 +256,7 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
                     maxLength={10}
                     value={mobile}
                     onChange={(e) => setMobile(e.target.value.replace(/\D/g, ""))}
-                    placeholder="10 अंकों का मोबाइल नंबर"
+                    placeholder={t("mobile_placeholder")}
                     className="flex-1 px-4 py-3.5 text-base outline-none bg-transparent text-slate-900"
                     style={{ fontFamily: "'Poppins', sans-serif" }}
                   />
@@ -269,7 +284,7 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
                   }
                 }}
                 disabled={mobile.length !== 10}
-                className="w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 font-bold text-base text-white shadow-md active:scale-[0.98] transition disabled:opacity-50 mb-3"
+                className="w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 font-bold text-base text-white shadow-md active:scale-[0.98] transition disabled:opacity-50 mb-3 cursor-pointer"
                 style={{
                   background: theme.btnGradient,
                   boxShadow: mobile.length === 10 ? theme.shadow : "none",
@@ -277,9 +292,8 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
                 }}
               >
                 <span style={{ fontFamily: "'Noto Serif', serif" }}>
-                  {isBuyer ? "खरीदारी शुरू करें (Get OTP)" : "OTP प्राप्त करें"}
+                  {isBuyer ? t("get_otp_buyer") : t("get_otp")}
                 </span>
-                <span>➔</span>
               </button>
 
               {/* Divider */}
@@ -295,7 +309,7 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
               <button
                 type="button"
                 onClick={handleCompleteLogin}
-                className="w-full flex items-center justify-center gap-2.5 rounded-2xl py-3 font-semibold text-sm transition-all active:scale-[0.98] mb-3 bg-white border border-stone-200 shadow-xs hover:shadow-md text-slate-800"
+                className="w-full flex items-center justify-center gap-2.5 rounded-2xl py-3 font-semibold text-sm transition-all active:scale-[0.98] mb-3 bg-white border border-stone-200 shadow-xs hover:shadow-md text-slate-800 cursor-pointer"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24">
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
@@ -303,7 +317,7 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
                   <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
                   <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
                 </svg>
-                <span>Google से जारी रखें</span>
+                <span>{t("continue_google")}</span>
               </button>
 
               {/* Trust Badge */}
@@ -316,7 +330,7 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
               >
                 <span className="text-xs">{isBuyer ? "🛡️" : "✓"}</span>
                 <span className="text-[11px] font-semibold" style={{ color: isBuyer ? "#5B21B6" : "#15803D" }}>
-                  {isBuyer ? "ONDC सत्यापित खरीदार पोर्टल · 100% सुरक्षित भुगतान" : "ONDC नेटवर्क द्वारा प्रमाणित · 100% सुरक्षित"}
+                  {isBuyer ? t("verified_trust_buyer") : t("verified_trust")}
                 </span>
               </div>
             </div>
@@ -330,11 +344,11 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
             <button
               type="button"
               onClick={() => setStage("landing")}
-              className="flex items-center gap-1.5 mb-6 self-start active:scale-95 transition"
+              className="flex items-center gap-1.5 mb-6 self-start active:scale-95 transition cursor-pointer"
               style={{ color: theme.primary }}
             >
               <span className="text-sm font-bold">←</span>
-              <span className="text-xs font-semibold" style={{ fontFamily: "'Noto Serif', serif" }}>वापस जाएं</span>
+              <span className="text-xs font-semibold" style={{ fontFamily: "'Noto Serif', serif" }}>{t("go_back")}</span>
             </button>
 
             <div className="text-center mb-6">
@@ -345,10 +359,10 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
                 {isBuyer ? "🛍️" : "📱"}
               </div>
               <h2 className="text-xl font-bold" style={{ color: theme.textDark, fontFamily: "'Noto Serif', serif" }}>
-                OTP दर्ज करें
+                {t("enter_otp")}
               </h2>
               <p className="text-xs mt-1" style={{ color: theme.textMuted }}>
-                +91 {mobile.slice(0, 5)}••••• पर भेजा गया कोड
+                +91 {mobile.slice(0, 5)}••••• {t("otp_sent_to")}
               </p>
             </div>
 
@@ -389,13 +403,20 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
                 }
               }}
               disabled={!otp.every((d) => d)}
-              className="w-full flex items-center justify-center gap-2 rounded-2xl py-4 font-bold text-base text-white shadow-lg transition-all active:scale-[0.98] mt-3 disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 rounded-2xl py-4 font-bold text-base text-white shadow-lg transition-all active:scale-[0.98] mt-3 disabled:opacity-50 cursor-pointer"
               style={{ background: theme.btnGradient }}
             >
-              <span>{isBuyer ? "✓ बाज़ार में प्रवेश करें" : "✓ OTP सत्यापित करें"}</span>
+              <span>{isBuyer ? t("enter_market") : t("verify_otp")}</span>
             </button>
           </div>
         )}
+
+        {/* 🌐 Flipkart-Style Language Bottom Sheet */}
+        <LanguageModal
+          isOpen={showLangModal}
+          onClose={() => setShowLangModal(false)}
+          theme={role === "seller" ? "seller" : "buyer"}
+        />
       </div>
     </div>
   );
