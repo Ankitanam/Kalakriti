@@ -1,8 +1,736 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Noto+Serif:ital,wght@0,400;0,700;1,400&display=swap');
-@import 'tailwindcss';
+@import "tailwindcss";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
 
 html,
 body,
 #root {
-    height: 100%;
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  overflow-x: hidden;
+}
+
+body {
+  background: #f5efe7;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+/* Force the app to center on desktop */
+#root {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100vw;
+}
+
+/* Phone/app container */
+.phone-shell {
+  width: min(390px, 100vw);
+  height: min(844px, 100vh);
+  background: #fffbf7;
+  border-radius: clamp(0px, 2vw, 28px);
+  overflow: hidden;
+  box-shadow:
+    0 24px 80px rgba(0, 0, 0, 0.18),
+    0 4px 16px rgba(0, 0, 0, 0.08);
+}
+/* =========================================================
+   KALAKRITI ARTISAN WORLD
+   ========================================================= */
+
+.artisan-world {
+  position: relative;
+  width: 100%;
+  height: 720px;
+  overflow: hidden;
+  background: #b9d7df;
+  isolation: isolate;
+}
+
+.artisan-world-scene {
+  position: absolute;
+  width: 110%;
+  height: 110%;
+  left: -5%;
+  top: -5%;
+  overflow: hidden;
+  transform-origin: center center;
+  will-change: transform;
+}
+
+/* =========================================================
+   SKY
+   ========================================================= */
+
+.world-sky {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      to bottom,
+      #9fcbd3 0%,
+      #c7dcd7 42%,
+      #e8d9b9 70%,
+      #c79b62 100%
+    );
+}
+
+/* =========================================================
+   HILLS
+   ========================================================= */
+
+.hill {
+  position: absolute;
+  bottom: 310px;
+  border-radius: 50% 50% 0 0;
+  background: #809b75;
+}
+
+.hill-one {
+  left: -8%;
+  width: 58%;
+  height: 240px;
+  opacity: 0.85;
+}
+
+.hill-two {
+  right: -10%;
+  width: 65%;
+  height: 280px;
+  background: #6f8c6c;
+  opacity: 0.75;
+}
+
+/* =========================================================
+   VILLAGE HOUSES
+   ========================================================= */
+
+.village {
+  position: absolute;
+  bottom: 310px;
+  width: 190px;
+  height: 170px;
+}
+
+.village-left {
+  left: 12%;
+}
+
+.village-center {
+  left: 43%;
+  transform: scale(0.9);
+}
+
+.village-right {
+  right: 10%;
+  transform: scale(1.05);
+}
+
+.house-roof {
+  position: absolute;
+  top: 0;
+  left: -15px;
+  width: 220px;
+  height: 80px;
+  background: #76523a;
+  clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+}
+
+.house-body {
+  position: absolute;
+  bottom: 0;
+  width: 190px;
+  height: 110px;
+  background: #c9935c;
+  border: 3px solid #795137;
+}
+
+.window {
+  position: absolute;
+  width: 38px;
+  height: 42px;
+  top: 25px;
+  left: 28px;
+  background: #557176;
+  border: 5px solid #5c3d2b;
+}
+
+.door {
+  position: absolute;
+  width: 45px;
+  height: 72px;
+  bottom: 0;
+  right: 28px;
+  background: #60412d;
+}
+
+/* =========================================================
+   TREES
+   ========================================================= */
+
+.tree {
+  position: absolute;
+  bottom: 290px;
+  width: 130px;
+  height: 220px;
+}
+
+.tree-left {
+  left: 3%;
+}
+
+.tree-right {
+  right: 3%;
+}
+
+.tree-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  background: #496f4b;
+  box-shadow:
+    35px 25px 0 #557b50,
+    -25px 45px 0 #416744,
+    50px 65px 0 #3e6441;
+}
+
+.tree-trunk {
+  position: absolute;
+  bottom: 0;
+  left: 55px;
+  width: 25px;
+  height: 120px;
+  background: #68482f;
+}
+
+/* =========================================================
+   SHOPS
+   ========================================================= */
+
+.shop {
+  position: absolute;
+  bottom: 245px;
+  width: 230px;
+  height: 230px;
+  z-index: 5;
+  filter: drop-shadow(0 18px 12px rgba(49, 34, 20, 0.25));
+}
+
+.shop-left {
+  left: 20%;
+}
+
+.shop-center {
+  left: 43%;
+  transform: scale(1.12);
+  z-index: 7;
+}
+
+.shop-right {
+  right: 18%;
+}
+
+.shop-roof {
+  position: absolute;
+  top: 0;
+  left: -20px;
+  width: 270px;
+  height: 85px;
+  background: #794a32;
+  clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+}
+
+.shop-front {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 230px;
+  height: 175px;
+  background: #bd8151;
+  border: 4px solid #67432d;
+}
+
+.shop-sign {
+  position: absolute;
+  top: 12px;
+  left: 25px;
+  width: 180px;
+  padding: 8px 0;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  background: #e2b66e;
+  color: #543722;
+  border: 2px solid #68442b;
+}
+
+.shop-opening {
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  bottom: 0;
+  height: 105px;
+  background: #4a3527;
+  border: 5px solid #67442c;
+}
+
+/* =========================================================
+   TEXTILE PRODUCTS
+   ========================================================= */
+
+.product {
+  position: absolute;
+  bottom: 10px;
+  width: 45px;
+  border-radius: 5px 5px 0 0;
+}
+
+.product-one {
+  left: 20px;
+  height: 65px;
+  background: #c85d48;
+}
+
+.product-two {
+  left: 75px;
+  height: 80px;
+  background: #e0b45d;
+}
+
+.product-three {
+  right: 20px;
+  height: 55px;
+  background: #698c79;
+}
+
+/* =========================================================
+   POTTERY
+   ========================================================= */
+
+.pot {
+  position: absolute;
+  bottom: 10px;
+  border-radius: 45% 45% 35% 35%;
+  background: #b96f43;
+}
+
+.pot-one {
+  left: 25px;
+  width: 40px;
+  height: 55px;
+}
+
+.pot-two {
+  left: 75px;
+  width: 50px;
+  height: 70px;
+}
+
+.pot-three {
+  right: 20px;
+  width: 42px;
+  height: 48px;
+}
+
+/* =========================================================
+   CRAFTS
+   ========================================================= */
+
+.craft {
+  position: absolute;
+  bottom: 12px;
+  border: 5px solid #d5a557;
+}
+
+.craft-one {
+  left: 30px;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+}
+
+.craft-two {
+  right: 30px;
+  width: 55px;
+  height: 70px;
+  border-radius: 12px;
+}
+
+/* =========================================================
+   ROAD
+   ========================================================= */
+
+.road {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -100px;
+  height: 420px;
+  background: #b47f4d;
+  clip-path: polygon(
+    35% 0%,
+    65% 0%,
+    100% 100%,
+    0% 100%
+  );
+  z-index: 4;
+}
+
+.road-path {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 6px;
+  height: 100%;
+  transform: translateX(-50%);
+  background: rgba(232, 199, 145, 0.25);
+}
+
+/* =========================================================
+   FOREGROUND
+   ========================================================= */
+
+.foreground-left {
+  position: absolute;
+  left: -5%;
+  bottom: -100px;
+  width: 42%;
+  height: 220px;
+  background: #7d5638;
+  border-radius: 50% 50% 0 0;
+  z-index: 10;
+  opacity: 0.85;
+}
+
+.foreground-right {
+  position: absolute;
+  right: -5%;
+  bottom: -110px;
+  width: 38%;
+  height: 240px;
+  background: #6c4a32;
+  border-radius: 50% 50% 0 0;
+  z-index: 10;
+  opacity: 0.9;
+}
+
+/* =========================================================
+   CENTER CONTENT
+   ========================================================= */
+
+.world-content {
+  position: absolute;
+  z-index: 20;
+  top: 85px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(700px, 90%);
+  text-align: center;
+  color: #fff;
+  text-shadow: 0 3px 12px rgba(0, 0, 0, 0.4);
+}
+
+.world-label {
+  display: inline-block;
+  margin-bottom: 18px;
+  padding: 7px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 30px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 4px;
+  background: rgba(50, 35, 20, 0.25);
+  backdrop-filter: blur(5px);
+}
+
+.world-content h1 {
+  margin: 0;
+  font-family: Georgia, serif;
+  font-size: clamp(42px, 6vw, 76px);
+  line-height: 0.98;
+  font-weight: 700;
+}
+
+.world-content p {
+  margin: 22px 0 28px;
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+.enter-world {
+  border: 0;
+  padding: 15px 28px;
+  border-radius: 4px;
+  background: #f1c36b;
+  color: #422d1c;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.enter-world:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 25px rgba(0, 0, 0, 0.3);
+}
+
+/* =========================================================
+   VIGNETTE
+   ========================================================= */
+
+.world-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      circle at center,
+      transparent 35%,
+      rgba(30, 24, 17, 0.08) 65%,
+      rgba(20, 18, 14, 0.42) 100%
+    );
+}
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 900px) {
+  .artisan-world {
+    height: 650px;
+  }
+
+  .shop-left {
+    left: 5%;
+  }
+
+  .shop-center {
+    left: 38%;
+  }
+
+  .shop-right {
+    right: 2%;
+  }
+
+  .village-left {
+    left: 2%;
+  }
+
+  .village-right {
+    right: 2%;
+  }
+}
+
+@media (max-width: 650px) {
+  .artisan-world {
+    height: 620px;
+  }
+
+  .shop {
+    transform: scale(0.7);
+  }
+
+  .shop-left {
+    left: -5%;
+  }
+
+  .shop-center {
+    left: 30%;
+    transform: scale(0.8);
+  }
+
+  .shop-right {
+    right: -10%;
+  }
+
+  .world-content {
+    top: 70px;
+  }
+
+  .world-content h1 {
+    font-size: 43px;
+  }
+
+  .world-content p {
+    font-size: 14px;
+  }
+}
+/* =========================================================
+   INTERACTIVE SHOPS
+   ========================================================= */
+
+.shop-interaction {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: inherit;
+}
+
+.shop-interaction .shop-roof,
+.shop-interaction .shop-front {
+  pointer-events: none;
+}
+
+.shop-tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: -35px;
+  transform: translateX(-50%) translateY(8px);
+
+  padding: 8px 14px;
+
+  background: rgba(40, 28, 18, 0.9);
+  color: white;
+
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+
+  white-space: nowrap;
+  border-radius: 4px;
+
+  opacity: 0;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+
+  pointer-events: none;
+}
+
+.shop-interaction:hover .shop-tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.shop-interaction:hover .shop-front {
+  filter: brightness(1.12);
+}
+
+.shop-interaction:hover .shop-roof {
+  filter: brightness(1.12);
+}
+.artisan-world {
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  position: relative;
+  background: #111;
+}
+
+.artisan-scene {
+  width: 110%;
+  height: 110%;
+  position: absolute;
+  left: -5%;
+  top: -5%;
+  transform-origin: center;
+}
+
+.artisan-background {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.artisan-background img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.artisan-background {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.artisan-background img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.artisan-scene {
+  position: absolute;
+  width: 110%;
+  height: 110%;
+  left: -5%;
+  top: -5%;
+  overflow: hidden;
+}
+
+.market-ui {
+  position: relative;
+  z-index: 5;
+}
+.artisan-world {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  background: #222;
+}
+
+.artisan-scene {
+  position: absolute;
+  width: 110%;
+  height: 110%;
+  left: -5%;
+  top: -5%;
+  overflow: hidden;
+  transform-origin: center center;
+}
+
+.artisan-background {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.artisan-background img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
 }
