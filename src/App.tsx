@@ -5,7 +5,9 @@ import CatalogPreview, { CatalogData } from "./CatalogPreview";
 import OnboardingScreen from "./OnboardingScreen";
 import ArtisanDashboard, { OrderItem } from "./ArtisanDashboard";
 import OndcBuyerScreen from "./OndcBuyerScreen";
+import ConfirmationModal from "./components/ConfirmationModal";
 import { CartItem, ConfirmedOrder } from "./utils/becknEngine";
+import { areItemsDuplicate, extractCoreKeyword, getDisplayTitle, KNOWN_CRAFT_LOCALIZATIONS, LocalizedContentMap } from "./utils/artisanAiService";
 
 // Craft Categories
 const CATEGORIES: Array<{ hi: string; en: string; key: TranslationKey }> = [
@@ -28,18 +30,30 @@ const INITIAL_SEED: StoreItem[] = [
     id: "seed-1",
     title_hi: "राजस्थानी पारंपरिक कठपुतली जोड़ा",
     title_en: "Rajasthani Traditional Handmade Puppets Pair",
+    title_local: "राजस्थानी पारंपरिक हस्तनिर्मित बाहुल्यांची जोडी (कठपुतळी)",
     suggested_price: 349,
     quantity: 3,
     imageUrl: "https://images.unsplash.com/photo-1599818471241-10515152865c?w=500",
+    imageSignature: "rajasthani_puppet_pair_seed",
     artisan_name: "शंकर लाल भाट",
     artisan_region: "जयपुर, राजस्थान",
     quick_summary_hi: "कपड़े और लकड़ी से हस्तनिर्मित पारंपरिक राजस्थानी कठपुतली।",
+    quick_summary_local: "कापड आणि लाकडापासून बनवलेली अस्सल पारंपरिक राजस्थानी कठपुतळी बाहुली.",
     quick_summary_en: "Authentic handcrafted traditional Rajasthani decorative puppet pair.",
+    story_hi: "यह शिल्प राजस्थान की प्राचीन लोक कला और कठपुतली परंपरा की समृद्ध विरासत को दर्शाता है।",
+    story_local: "ही हस्तकला राजस्थानच्या प्राचीन लोककलेचा आणि पिढ्यानपिढ्या चालत आलेल्या कठपुतळी परंपरेचा समृद्ध वारसा दर्शवते.",
+    story_en: "This craft celebrates centuries of Rajasthani folk heritage and generational puppet theatre artistry.",
     specs_hi: [
       { label: "कला शैली", value: "राजस्थानी कठपुतली शिल्प" },
       { label: "सामग्री", value: "लकड़ी, गोटा-पट्टी व कपड़ा" },
       { label: "आकार", value: "ऊंचाई लगभग 12 इंच" },
       { label: "उपयोग", value: "गृह सज्जा, सांस्कृतिक उपहार" },
+    ],
+    specs_local: [
+      { label: "कला शैली", value: "राजस्थानी कठपुतळी शिल्प" },
+      { label: "साहित्य", value: "लाकूड, गोटा-पट्टी व अस्सल कापड" },
+      { label: "आकार", value: "उंची साधारण १२ इंच" },
+      { label: "वापर", value: "घर सजावट, सांस्कृतिक भेट" },
     ],
     specs_en: [
       { label: "Craft Type", value: "Rajasthani Puppet Craft" },
@@ -49,23 +63,36 @@ const INITIAL_SEED: StoreItem[] = [
     ],
     tags: ["Puppets", "Rajasthan", "ONDC Live"],
     publishedAt: "आज",
+    localizedContent: KNOWN_CRAFT_LOCALIZATIONS.puppet,
   },
   {
     id: "seed-2",
     title_hi: "सजावटी हस्तनिर्मित लाल मिट्टी का कलश",
     title_en: "Decorative Handcrafted Red Terracotta Kalash",
+    title_local: "सजावटी हस्तनिर्मित लाल मातीचा कलश (घडा)",
     suggested_price: 199,
     quantity: 5,
     imageUrl: "https://images.unsplash.com/photo-1604264726154-26480e76f4e1?w=500",
+    imageSignature: "red_terracotta_kalash_seed",
     artisan_name: "रमेश प्रजापति",
     artisan_region: "अलवर, राजस्थान",
     quick_summary_hi: "पारंपरिक लाल मिट्टी से बना सुंदर सजावटी कलश।",
+    quick_summary_local: "पारंपरिक लाल मातीपासून तयार केलेला सुंदर आणि नक्षीदार कलश.",
     quick_summary_en: "Traditional red clay pot with stone and zari embellishments.",
+    story_hi: "शुद्ध प्राकृतिक मिट्टी से कुम्हार के चाक पर गढ़ा गया यह कलश भारतीय परंपरा और पवित्रता का प्रतीक है।",
+    story_local: "शुद्ध नैसर्गिक मातीपासून कुंभाराच्या चाकावर घडवलेला हा कलश भारतीय संस्कृती आणि मांगल्याचे प्रतीक आहे.",
+    story_en: "Masterfully shaped from pure earthen clay on the traditional potter's wheel, embodying sustainable living.",
     specs_hi: [
       { label: "कला शैली", value: "पारंपरिक टेराकोटा" },
       { label: "सामग्री", value: "100% शुद्ध लाल मिट्टी" },
       { label: "आकार", value: "मध्यम (ऊंचाई ~7 इंच)" },
       { label: "उपयोग", value: "गृह सज्जा, पूजा, त्यौहार" },
+    ],
+    specs_local: [
+      { label: "कला शैली", value: "पारंपरिक टेराकोटा मातीकाम" },
+      { label: "साहित्य", value: "१००% शुद्ध लाल माती" },
+      { label: "आकार", value: "मध्यम (उंची ~७ इंच)" },
+      { label: "वापर", value: "घर सजावट, पूजा व सण" },
     ],
     specs_en: [
       { label: "Craft Type", value: "Terracotta Pottery" },
@@ -75,22 +102,38 @@ const INITIAL_SEED: StoreItem[] = [
     ],
     tags: ["Terracotta", "Handmade", "ONDC Live"],
     publishedAt: "आज",
+    localizedContent: KNOWN_CRAFT_LOCALIZATIONS.kalash,
   },
 ];
 
-// 🛡️ ई-कॉमर्स डी-डुप्लीकेशन लॉजिक: एक ही फोटो या नाम के डुप्लीकेट कार्ड्स को मर्ज करना (Issue 1 Fix)
 const deduplicateInventory = (items: StoreItem[]): StoreItem[] => {
-  const seen = new Map<string, StoreItem>();
+  const merged: StoreItem[] = [];
   for (const item of items) {
-    const key = item.imageUrl?.trim() || item.title_hi?.trim() || item.id;
-    if (seen.has(key)) {
-      const existing = seen.get(key)!;
-      existing.quantity = Math.max(0, (Number(existing.quantity) || 0) + (Number(item.quantity) || 1));
+    const existing = merged.find((m) => areItemsDuplicate(m, item));
+    if (existing) {
+      existing.quantity = Math.max(1, (Number(existing.quantity) || 0) + (Number(item.quantity) || 1));
+      if (item.imageUrl && (!existing.imageUrl || existing.imageUrl.startsWith("blob:"))) {
+        existing.imageUrl = item.imageUrl;
+      }
+      if (item.imageSignature && !existing.imageSignature) {
+        existing.imageSignature = item.imageSignature;
+      }
+      if (item.localizedContent) {
+        existing.localizedContent = {
+          ...(existing.localizedContent || {}),
+          ...item.localizedContent,
+        };
+      }
     } else {
-      seen.set(key, { ...item, quantity: Math.max(0, Number(item.quantity) || 1) });
+      if (item.id === "seed-1" && !item.localizedContent) {
+        item.localizedContent = KNOWN_CRAFT_LOCALIZATIONS.puppet;
+      } else if (item.id === "seed-2" && !item.localizedContent) {
+        item.localizedContent = KNOWN_CRAFT_LOCALIZATIONS.kalash;
+      }
+      merged.push({ ...item, quantity: Math.max(1, Number(item.quantity) || 1) });
     }
   }
-  return Array.from(seen.values());
+  return merged;
 };
 
 export default function App() {
@@ -168,6 +211,7 @@ export default function App() {
 
   // Form states
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [imageSignature, setImageSignature] = useState<string>("");
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -181,14 +225,14 @@ export default function App() {
   const [selectedPreviewItem, setSelectedPreviewItem] = useState<CatalogData | null>(null);
 
   const [showPriceModal, setShowPriceModal] = useState(false);
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showBackConfirm, setShowBackConfirm] = useState(false);
   const [manualPriceInput, setManualPriceInput] = useState("");
   // ── 🌐 Multilingual Language Hook & Speech Locale Sync ──
-  const { t, speechLang, currentLang } = useLanguage();
+  const { t, speechLang, currentLang, languages } = useLanguage();
 
   const handleOpenPriceModal = () => {
     if (!selectedFile && !photoUrl) {
-      alert("कृपया पहले कैमरे या गैलरी से सामान की फोटो चुनें!");
+      alert(t("select_photo_first_alert"));
       return;
     }
     setShowPriceModal(true);
@@ -271,7 +315,7 @@ export default function App() {
       console.warn("Could not sync buyer tracking:", e);
     }
 
-    alert("📦 आर्डर सफलतापूर्वक पैक हो गया! India Post स्पीड पोस्ट को पिकअप भेज दिया गया है।");
+    alert(t("order_packed_dispatch_alert"));
   };
 
   // सेलर स्टॉक कंट्रोलर (+ / -): अब स्टॉक 0 तक जा सकता है और आउट ऑफ स्टॉक हो सकता है
@@ -296,7 +340,7 @@ export default function App() {
   };
 
   const handleRemoveProduct = (id: string) => {
-    if (window.confirm("क्या आप इस उत्पाद को दुकान से हटाना चाहते हैं?")) {
+    if (window.confirm(t("remove_product_confirm"))) {
       const updated = inventory.filter((item) => item.id !== id);
       setInventory(updated);
       localStorage.setItem("kalakriti_inventory", JSON.stringify(updated));
@@ -304,14 +348,10 @@ export default function App() {
     }
   };
 
-  // 🛡️ नया सामान जोड़ते समय डुप्लीकेट चेक (Issue 1 Permanent Fix)
+  // 🛡️ नया सामान जोड़ते समय डुप्लीकेट चेक (Issue 2 Permanent Fix)
   const saveProductToInventory = (catalogItem: CatalogData) => {
-    // अगर वही फोटो या वही नाम पहले से दुकान में है, तो नया कार्ड न बनाएं—स्टॉक बढ़ा दें!
-    const existingIndex = inventory.findIndex(
-      (item) =>
-        (catalogItem.imageUrl && item.imageUrl?.trim() === catalogItem.imageUrl?.trim()) ||
-        item.title_hi?.trim() === catalogItem.title_hi?.trim()
-    );
+    // अगर वही फोटो, वही सिग्नेचर या वही सामान पहले से दुकान में है, तो नया कार्ड न बनाएं—स्टॉक बढ़ा दें!
+    const existingIndex = inventory.findIndex((item) => areItemsDuplicate(item, catalogItem));
 
     let updatedList: StoreItem[];
     if (existingIndex > -1) {
@@ -321,6 +361,11 @@ export default function App() {
               ...item,
               quantity: (Number(item.quantity) || 0) + 1,
               imageUrl: catalogItem.imageUrl || item.imageUrl,
+              imageSignature: catalogItem.imageSignature || item.imageSignature,
+              localizedContent: {
+                ...(item.localizedContent || {}),
+                ...(catalogItem.localizedContent || {}),
+              },
             }
           : item
       );
@@ -331,6 +376,7 @@ export default function App() {
         quantity: 1,
         publishedAt: "आज",
         categoryName: CATEGORIES[selectedCategory].en,
+        localizedContent: catalogItem.localizedContent || {},
       };
       updatedList = [newEntry, ...inventory];
     }
@@ -341,6 +387,7 @@ export default function App() {
     window.dispatchEvent(new Event("storage"));
 
     setSelectedFile(null);
+    setImageSignature("");
     setPhotoUrl(null);
     setVoiceText("");
   };
@@ -349,6 +396,7 @@ export default function App() {
     const file = e.target.files?.[0];
     if (file) {
       setSelectedFile(file);
+      setImageSignature(`${file.name}_${file.size}_${file.lastModified}`);
       setPhotoUrl(URL.createObjectURL(file));
     }
   };
@@ -425,7 +473,7 @@ export default function App() {
 
     try {
       setIsLoading(true);
-      setLoadingStage("फोटो सुधारी जा रही है (Cloudinary)...");
+      setLoadingStage(t("ai_status_enhancing"));
 
       let finalImageUrl = photoUrl || "";
       if (selectedFile) {
@@ -433,15 +481,21 @@ export default function App() {
         finalImageUrl = cloudResult.enhancedUrl || photoUrl || "";
       }
 
-      setLoadingStage(
-        customPrice
-          ? `आपकी तय कीमत (₹${customPrice}) से कैटलॉग बन रहा है...`
-          : "AI बाज़ार के अनुसार सही मूल्य तय कर रहा है..."
-      );
+      setLoadingStage(t("ai_status_understanding"));
 
-      const geminiKey = import.meta.env.VITE_GEMINI_KEY;
+      const geminiKey = import.meta.env.VITE_GEMINI_KEY || import.meta.env.VITE_GEMINI_API_KEY;
       const categoryName = CATEGORIES[selectedCategory].en;
       const userNote = voiceText || "हस्तशिल्प उत्पाद";
+
+      // 🌐 भाषा-जागरूक स्थानीयकरण (Active Artisan Language Meta)
+      const activeLangMeta = languages?.find((l) => l.code === currentLang) || {
+        code: "hi",
+        nativeName: "हिन्दी",
+        englishName: "Hindi",
+        speechLang: "hi-IN",
+      };
+
+      setLoadingStage(t("ai_status_generating_name"));
 
       let generatedData: any = null;
 
@@ -457,41 +511,58 @@ Carefully inspect the attached photo. User voice note: "${userNote}". Category: 
 
 ${pricingInstruction}
 
-CRITICAL TASK: Generate rich, evocative, high-converting marketplace catalog copy that honors the artisan's craft heritage.
-Do NOT write bland or generic 1-line text. Provide deep cultural storytelling, craft highlights, and precise specifications.
+ARTISAN LANGUAGE PREFERENCE:
+The artisan has chosen their native language: ${activeLangMeta.englishName} (${activeLangMeta.nativeName}, ISO code: "${currentLang}").
+CRITICAL MULTILINGUAL REQUIREMENT:
+You MUST output all artisan-facing fields in fluent, authentic ${activeLangMeta.englishName} script (${activeLangMeta.nativeName}):
+- "title_hi": Write an attractive, culturally authentic craft title ENTIRELY in ${activeLangMeta.englishName} script (${activeLangMeta.nativeName}). (Keep the JSON key 'title_hi' for system compatibility, but the text value MUST be in ${activeLangMeta.englishName}).
+- "quick_summary_hi": Write 1 enticing hook sentence ENTIRELY in ${activeLangMeta.englishName} script (${activeLangMeta.nativeName}).
+- "story_hi": Write 2-3 evocative sentences describing the cultural heritage, artisan generational craftsmanship technique (e.g. natural dyes, potter's wheel, or intricate hand embroidery), and timeless aesthetic value ENTIRELY in authentic ${activeLangMeta.englishName} script (${activeLangMeta.nativeName}).
+- "highlights_hi": Array of 3 craft highlights in ${activeLangMeta.englishName} script (${activeLangMeta.nativeName}).
+- "specs_hi": Array of 4 specification objects with {"label": "...", "value": "..."} in ${activeLangMeta.englishName} script (${activeLangMeta.nativeName}).
+- "title_local": Write an attractive, culturally authentic craft title ENTIRELY in ${activeLangMeta.englishName} script (${activeLangMeta.nativeName}).
+- "quick_summary_local": Write 1 enticing hook sentence ENTIRELY in ${activeLangMeta.englishName} script (${activeLangMeta.nativeName}).
+- "story_local": Write 2-3 evocative sentences describing the cultural heritage, artisan generational craftsmanship technique (e.g. natural dyes, potter's wheel, or intricate hand embroidery), and timeless aesthetic value ENTIRELY in authentic ${activeLangMeta.englishName} script (${activeLangMeta.nativeName}).
+- "highlights_local": Array of 3 craft highlights in ${activeLangMeta.englishName} script (${activeLangMeta.nativeName}).
+- "specs_local": Array of 4 specification objects with {"label": "...", "value": "..."} in ${activeLangMeta.englishName} script (${activeLangMeta.nativeName}).
+
+For nationwide ONDC marketplace buyers:
+- "title_en", "quick_summary_en", "story_en", "highlights_en", "specs_en": Write evocative, high-converting English copy honoring the craft heritage.
 
 Output ONLY valid JSON matching this schema:
 {
-  "title_hi": "सटीक और आकर्षक हिंदी नाम (उदा. पारंपरिक मधुबनी सूर्य पेंटिंग)",
-  "title_en": "Evocative English craft name (e.g. Handmade Madhubani Sun Divinity Folk Painting)",
+  "title_hi": "...",
+  "title_local": "...",
+  "title_en": "...",
   "suggested_price": ${customPrice || 199},
-  "artisan_name": "कारीगर का नाम",
-  "artisan_region": "शिल्प का प्रसिद्ध क्षेत्र व राज्य (उदा. मधुबनी, बिहार)",
-  "quick_summary_hi": "1 आकर्षक हुक लाइन जिसमें उत्पाद की मुख्य पहचान हो।",
-  "quick_summary_en": "1 crisp, enticing sentence highlighting the craft.",
-  "story_hi": "2-3 पंक्तियों में इस शिल्प की प्राचीन विरासत, निर्माण की हस्तनिर्मित तकनीक (जैसे प्राकृतिक रंग, चाक पर गढ़ी मिट्टी, या बारीक हाथ की बुनाई) और इसके सांस्कृतिक महत्व की सुंदर कहानी लिखें।",
-  "story_en": "2-3 evocative sentences describing the cultural heritage, artisan craftsmanship technique, and timeless aesthetic value for modern living spaces.",
-  "highlights_hi": [
-    "100% पर्यावरण-अनुकूल एवं प्राकृतिक सामग्री",
-    "पीढ़ीगत पारंपरिक तकनीकों द्वारा हस्तनिर्मित",
-    "गृह सज्जा, पूजा एवं सांस्कृतिक उपहार हेतु उत्तम"
-  ],
-  "highlights_en": [
-    "100% Eco-friendly & naturally sourced materials",
-    "Handcrafted using authentic generational techniques",
-    "Ideal for cultural aesthetics, decor & mindful gifting"
+  "artisan_name": "...",
+  "artisan_region": "...",
+  "quick_summary_hi": "...",
+  "quick_summary_local": "...",
+  "quick_summary_en": "...",
+  "story_hi": "...",
+  "story_local": "...",
+  "story_en": "...",
+  "highlights_hi": ["...", "...", "..."],
+  "highlights_local": ["...", "...", "..."],
+  "highlights_en": ["...", "...", "..."],
+  "specs_local": [
+    { "label": "...", "value": "..." },
+    { "label": "...", "value": "..." },
+    { "label": "...", "value": "..." },
+    { "label": "...", "value": "..." }
   ],
   "specs_hi": [
-    { "label": "कला / शिल्प", "value": "विशिष्ट शिल्प का नाम" },
-    { "label": "सामग्री", "value": "उपयोग की गई वास्तविक सामग्री" },
-    { "label": "आकार", "value": "अनुमानित आकार / आयाम" },
-    { "label": "उपयोग", "value": "सजावट, पूजा, या दैनिक उपयोग" }
+    { "label": "...", "value": "..." },
+    { "label": "...", "value": "..." },
+    { "label": "...", "value": "..." },
+    { "label": "...", "value": "..." }
   ],
   "specs_en": [
-    { "label": "Craft Form", "value": "Specific Art / Craft Form" },
-    { "label": "Material", "value": "Raw materials used" },
-    { "label": "Size", "value": "Estimated size" },
-    { "label": "Best For", "value": "Home aesthetics, decor & gifting" }
+    { "label": "Craft Form", "value": "..." },
+    { "label": "Material", "value": "..." },
+    { "label": "Size", "value": "..." },
+    { "label": "Best For", "value": "..." }
   ],
   "tags": ["Handmade", "Kalakriti", "ONDC Verified", "HeritageCraft"]
 }
@@ -525,6 +596,45 @@ Output ONLY valid JSON matching this schema:
             const text = json.candidates?.[0]?.content?.parts?.[0]?.text || "";
             const cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
             generatedData = JSON.parse(cleanText);
+
+            // Sync _local and _hi fields for cross-system backward compatibility
+            const tLoc = generatedData.title_local || generatedData.title_hi || "";
+            const sLoc = generatedData.story_local || generatedData.story_hi || "";
+            const qLoc = generatedData.quick_summary_local || generatedData.quick_summary_hi || "";
+            const hLoc = generatedData.highlights_local || generatedData.highlights_hi || [];
+            const spLoc = generatedData.specs_local || generatedData.specs_hi || [];
+
+            generatedData.title_local = tLoc;
+            generatedData.title_hi = tLoc;
+            generatedData.story_local = sLoc;
+            generatedData.story_hi = sLoc;
+            generatedData.quick_summary_local = qLoc;
+            generatedData.quick_summary_hi = qLoc;
+            generatedData.highlights_local = hLoc;
+            generatedData.highlights_hi = hLoc;
+            generatedData.specs_local = spLoc;
+            generatedData.specs_hi = spLoc;
+
+            // Populate localizedContent for the current language and English
+            if (!generatedData.localizedContent) {
+              generatedData.localizedContent = {};
+            }
+            generatedData.localizedContent[currentLang] = {
+              title: tLoc,
+              story: sLoc,
+              quick_summary: qLoc,
+              highlights: hLoc,
+              specs: spLoc,
+            };
+            if (generatedData.title_en) {
+              generatedData.localizedContent["en"] = {
+                title: generatedData.title_en,
+                story: generatedData.story_en || "",
+                quick_summary: generatedData.quick_summary_en || "",
+                highlights: generatedData.highlights_en || [],
+                specs: generatedData.specs_en || [],
+              };
+            }
           }
         } catch (apiErr) {
           console.warn("Gemini call error:", apiErr);
@@ -536,17 +646,123 @@ Output ONLY valid JSON matching this schema:
         const autoPrice = isPainting ? 299 : 180;
         const finalPrice = customPrice ? Number(customPrice) : autoPrice;
 
+        const fallbackByLang: Record<string, { title: string; summary: string; story: string; craft: string; material: string }> = {
+          mr: {
+            title: isPainting ? "पारंपरिक मधुबनी लोककला चित्र" : "हस्तनिर्मित पारंपरिक मातीचे भांडे",
+            summary: "कुशल कारागिरांनी हाताने बनवलेली अस्सल हस्तकला वस्तू.",
+            story: "ही हस्तकला भारताच्या प्राचीन संस्कृतीचे आणि पिढ्यानपिढ्या चालत आलेल्या कारागिरीचे सुंदर प्रतीक आहे. स्थानिक नैसर्गिक साहित्यापासून तयार केलेली ही कला घरामध्‍ये समृद्धी आणते.",
+            craft: isPainting ? "मधुबनी लोककला" : "पारंपरिक कुंभारकाम",
+            material: isPainting ? "हँडमेड कागद व नैसर्गिक रंग" : "१००% शुद्ध लाल माती",
+          },
+          bn: {
+            title: isPainting ? "ঐতিহ্যবাহী মধুবনী লোকশিল্প পেইন্টিং" : "হস্তনির্মিত ঐতিহ্যবাহী মাটির পাত্র",
+            summary: "দক্ষ কারিগরদের দ্বারা হাতে তৈরি খাঁটি হস্তশিল্প পণ্য।",
+            story: "এই শিল্পকর্মটি ভারতীয় লোকঐতিহ্য ও বংশানুক্রমিক দক্ষতার প্রতীক। প্রাকৃতিক উপাদান দিয়ে নিখুঁতভাবে তৈরি এই হস্তশিল্প ঘরের নান্দনিকতা বৃদ্ধি করে।",
+            craft: isPainting ? "মধুবনী চিত্রকলা" : "ঐতিহ্যবাহী মৃৎশিল্প",
+            material: isPainting ? "হ্যান্ডমেড কাগজ ও প্রাকৃতিক রং" : "১০০% খাঁটি লাল মাটি",
+          },
+          gu: {
+            title: isPainting ? "પરંપરાગત મધુબની લોકકલા પેઇન્ટિંગ" : "હસ્તનિર્મિત પરંપરાગત માટીનું વાસણ",
+            summary: "કુશળ કારીગરો દ્વારા હાથથી બનાવેલ અસલ હસ્તકલા ઉત્પાદન.",
+            story: "આ હસ્તકળા ભારતીય પ્રાચીન લોક પરંપરા અને વારસાનું પ્રતીક છે. કુદરતી સામગ્રીમાંથી પ્રેમપૂર્વક તૈયાર કરેલ આ કલા ઘરમાં સાંસ્કૃતિક સુંદરતા લાવે છે.",
+            craft: isPainting ? "મધુબની ચિત્રકામ" : "પરંપરાગત માટીકામ",
+            material: isPainting ? "હેન્ડમેડ કાગળ અને કુદરતી રંગો" : "૧૦૦% શુદ્ધ માટી",
+          },
+          ta: {
+            title: isPainting ? "பாரம்பரிய மதுபானி நாட்டுப்புற ஓவியம்" : "கைவினைப் பாரம்பரிய மண்பாண்டம்",
+            summary: "திறமையான கைவினைஞர்களால் உருவாக்கப்பட்ட அசல் தயாரிப்பு.",
+            story: "இந்த கைவினைப்பொருள் இந்தியாவின் பாரம்பரிய கலாச்சாரத்தை பிரதிபலிக்கிறது. இயற்கையான பொருட்களைக் கொண்டு தலைமுறை தலைமுறையாக கைவினைஞர்களால் வடிக்கப்பட்டது.",
+            craft: isPainting ? "மதுபானி ஓவியக்கலை" : "மட்பாண்டக் கலை",
+            material: isPainting ? "கைவினை காகிதம் & இயற்கை நிறங்கள்" : "100% இயற்கை களிமண்",
+          },
+          te: {
+            title: isPainting ? "సాంప్రదాయ మధుబని జానపద పెయింటింగ్" : "హస్తకళా సాంప్రదాయ మట్టి కుండ",
+            summary: "నైపుణ్యం కలిగిన కళాకారులచే స్వహస్తాలతో తయారు చేయబడిన ప్రామాణిక ఉత్పత్తి.",
+            story: "ఈ చేతిపని భారతదేశ ప్రాచీన సంస్కృతికి మరియు తరతరాల కళా నైపుణ్యానికి ప్రతీక. సహజమైన పదార్థాలతో రూపొందించబడిన ఈ కళ గృహానికి సాంస్కృతిక శోభను చేకూరుస్తుంది.",
+            craft: isPainting ? "మధుబని చిత్రకళ" : "సాంప్రదాయ కుండల తయారీ",
+            material: isPainting ? "హ్యాండ్‌మేడ్ పేపర్ & సహజ రంగులు" : "100% సహజ మట్టి",
+          },
+          en: {
+            title: isPainting ? "Traditional Handpainted Madhubani Artwork" : "Authentic Handcrafted Terracotta Clay Vessel",
+            summary: "Authentic generational craft directly from rural artisan clusters.",
+            story: "Handcrafted using age-old ancestral techniques and sustainable organic materials, carrying the soulful cultural heritage of rural craft masters into modern spaces.",
+            craft: isPainting ? "Madhubani Art" : "Pottery",
+            material: isPainting ? "Handmade Paper & Organic Pigments" : "100% Natural Terracotta Clay",
+          },
+          hi: {
+            title: isPainting ? "पारंपरिक मधुबनी लोककला पेंटिंग" : "हस्तनिर्मित पारंपरिक मिट्टी की हांडी",
+            summary: "कुशल कारीगरों द्वारा हस्तनिर्मित प्रामाणिक उत्पाद।",
+            story: "यह शिल्प भारत की प्राचीन विरासत और पीढ़ीगत कारीगरी का सुंदर प्रतीक है। स्थानीय पर्यावरण-अनुकूल सामग्री और प्राकृतिक रंगों से तैयार यह कला घर में सकारात्मकता लाती है।",
+            craft: isPainting ? "मधुबनी लोककला" : "पारंपरिक कुम्हारी",
+            material: isPainting ? "हैंडमेड पेपर एवं प्राकृतिक रंग" : "100% प्राकृतिक मिट्टी",
+          },
+        };
+
+        const loc = fallbackByLang[currentLang] || fallbackByLang.hi;
+
+        const fallbackLocalizedContent: LocalizedContentMap = {};
+        for (const [code, fData] of Object.entries(fallbackByLang)) {
+          fallbackLocalizedContent[code as any] = {
+            title: fData.title,
+            story: fData.story,
+            quick_summary: fData.summary,
+            highlights: code === "en" ? [
+              "100% Handcrafted from organic, sustainable materials",
+              "Direct from generational rural artisan clusters",
+              "Ideal for aesthetic home decor & mindful gifting",
+            ] : [
+              "100% हस्तनिर्मित एवं पर्यावरण-अनुकूल",
+              "पारंपरिक शिल्पकारों द्वारा प्रामाणिक निर्माण",
+              "गृह सज्जा, पूजा एवं सांस्कृतिक उपहार हेतु उपयुक्त",
+            ],
+            specs: code === "en" ? [
+              { label: "Craft Form", value: isPainting ? "Madhubani Art" : "Pottery" },
+              { label: "Material", value: isPainting ? "Handmade Paper" : "Natural Clay" },
+              { label: "Best For", value: "Decor & Gifting" },
+            ] : [
+              { label: "कला / शिल्प", value: fData.craft },
+              { label: "सामग्री", value: fData.material },
+              { label: "उपयोग", value: "गृह सज्जा और उपहार" },
+            ],
+          };
+        }
+
         generatedData = {
-          title_hi: isPainting ? "पारंपरिक मधुबनी लोककला पेंटिंग" : "हस्तनिर्मित पारंपरिक मिट्टी की हांडी",
+          title_local: loc.title,
+          title_hi: loc.title,
           title_en: isPainting ? "Handmade Madhubani Folk Painting" : "Traditional Handcrafted Clay Pot",
           suggested_price: finalPrice,
           artisan_name: isPainting ? "माधुरी देवी" : "रमेश प्रजापति",
           artisan_region: isPainting ? "मिथिला, बिहार" : "अलवर, राजस्थान",
-          quick_summary_hi: "कुशल कारीगरों द्वारा हस्तनिर्मित प्रामाणिक उत्पाद।",
+          quick_summary_local: loc.summary,
+          quick_summary_hi: loc.summary,
           quick_summary_en: "Authentic handcrafted craft directly from rural artisan.",
+          story_local: loc.story,
+          story_hi: loc.story,
+          story_en: "This authentic craft represents centuries of Indian generational heritage, meticulously shaped using sustainable materials.",
+          highlights_local: [
+            "100% हस्तनिर्मित एवं पर्यावरण-अनुकूल",
+            "पारंपरिक शिल्पकारों द्वारा प्रामाणिक निर्माण",
+            "गृह सज्जा, पूजा एवं सांस्कृतिक उपहार हेतु उपयुक्त",
+          ],
+          highlights_hi: [
+            "100% हस्तनिर्मित एवं पर्यावरण-अनुकूल",
+            "पारंपरिक शिल्पकारों द्वारा प्रामाणिक निर्माण",
+            "गृह सज्जा, पूजा एवं सांस्कृतिक उपहार हेतु उपयुक्त",
+          ],
+          highlights_en: [
+            "100% Handcrafted from organic, sustainable materials",
+            "Direct from generational rural artisan clusters",
+            "Ideal for aesthetic home decor & mindful gifting",
+          ],
+          specs_local: [
+            { label: "कला / शिल्प", value: loc.craft },
+            { label: "सामग्री", value: loc.material },
+            { label: "उपयोग", value: "गृह सज्जा और उपहार" },
+          ],
           specs_hi: [
-            { label: "कला / शिल्प", value: isPainting ? "मधुबनी लोककला" : "पारंपरिक कुम्हारी" },
-            { label: "सामग्री", value: isPainting ? "हैंडमेड पेपर एवं प्राकृतिक रंग" : "100% प्राकृतिक मिट्टी" },
+            { label: "कला / शिल्प", value: loc.craft },
+            { label: "सामग्री", value: loc.material },
             { label: "उपयोग", value: "गृह सज्जा और उपहार" },
           ],
           specs_en: [
@@ -555,6 +771,7 @@ Output ONLY valid JSON matching this schema:
             { label: "Best For", value: "Decor & Gifting" },
           ],
           tags: ["Handmade", "ONDC Ready"],
+          localizedContent: fallbackLocalizedContent,
         };
       }
 
@@ -565,13 +782,16 @@ Output ONLY valid JSON matching this schema:
       const finalPayload: CatalogData = {
         ...generatedData,
         imageUrl: finalImageUrl,
+        imageSignature: imageSignature || (selectedFile ? `${selectedFile.name}_${selectedFile.size}` : undefined),
+        language: currentLang,
       };
 
+      setLoadingStage(t("ai_status_checking_duplicates"));
       saveProductToInventory(finalPayload);
       setSelectedPreviewItem(finalPayload);
       setScreen("preview");
     } catch (err: any) {
-      alert("त्रुटि: " + (err.message || err));
+      alert(t("error_prefix") + (err.message || err));
     } finally {
       setIsLoading(false);
       setLoadingStage("");
@@ -663,10 +883,11 @@ Output ONLY valid JSON matching this schema:
         >
           <button
             type="button"
-            onClick={() => setShowLogoutConfirm(true)}
+            onClick={() => setShowBackConfirm(true)}
             className="w-10 h-10 rounded-full flex items-center justify-center text-white active:scale-95 transition cursor-pointer"
             style={{ background: "rgba(255,255,255,0.12)" }}
-            title="दुकान पर वापस जाएं"
+            title={t("go_back")}
+            aria-label={t("go_back")}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
               <path
@@ -853,7 +1074,7 @@ Output ONLY valid JSON matching this schema:
                 <textarea
                   className="w-full h-full resize-none p-3 text-sm outline-none bg-transparent"
                   style={{ color: "#3D1F0F" }}
-                  placeholder={isRecording ? "सुन रहे हैं…" : t("voice_placeholder")}
+                  placeholder={isRecording ? t("voice_listening") : t("voice_placeholder")}
                   value={voiceText}
                   onChange={(e) => setVoiceText(e.target.value)}
                 />
@@ -894,7 +1115,7 @@ Output ONLY valid JSON matching this schema:
                     border: "1.5px solid " + (selectedCategory === i ? "#6B3A2A" : "rgba(196,136,107,0.3)"),
                   }}
                 >
-                  {t(cat.key)} ({cat.en})
+                  {currentLang === "en" ? t(cat.key) : `${t(cat.key)} (${cat.en})`}
                 </button>
               ))}
             </div>
@@ -917,7 +1138,7 @@ Output ONLY valid JSON matching this schema:
             }}
           >
             {isLoading ? (
-              <span className="animate-pulse">{loadingStage || "तैयार हो रहा है..."}</span>
+              <span className="animate-pulse">{loadingStage || t("processing")}</span>
             ) : (
               <>
                 <span>✦</span>
@@ -947,10 +1168,10 @@ Output ONLY valid JSON matching this schema:
                       className="text-base font-bold text-[#3D1F0F]"
                       style={{ fontFamily: "'Noto Serif', serif" }}
                     >
-                      कीमत कैसे तय करना चाहते हैं?
+                      {t("pricing_modal_title")}
                     </h3>
                     <p className="text-[11px] text-[#8B4513]">
-                      अपनी मर्ज़ी से कीमत डालें या AI को तय करने दें
+                      {t("pricing_modal_subtitle")}
                     </p>
                   </div>
                 </div>
@@ -968,14 +1189,14 @@ Output ONLY valid JSON matching this schema:
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-[#6B3A2A] flex items-center gap-1.5">
                     <span>✨</span>
-                    <span>विकल्प 1: AI बाज़ार भाव (अनुशंसित)</span>
+                    <span>{t("pricing_option1_badge")}</span>
                   </span>
                   <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full">
                     ONDC Ready
                   </span>
                 </div>
                 <p className="text-[11px] text-stone-600 leading-relaxed">
-                  AI फोटो और कला की बारीकी देखकर सबसे सही प्रतिस्पर्धी दाम खुद तय करेगा।
+                  {t("pricing_option1_desc")}
                 </p>
                 <button
                   type="button"
@@ -984,7 +1205,7 @@ Output ONLY valid JSON matching this schema:
                   style={{ background: "linear-gradient(135deg, #8B4513 0%, #6B3A2A 100%)" }}
                 >
                   <span>✨</span>
-                  <span>AI को कीमत तय करने दें</span>
+                  <span>{t("pricing_option1_btn")}</span>
                 </button>
               </div>
 
@@ -992,7 +1213,7 @@ Output ONLY valid JSON matching this schema:
               <div className="flex items-center gap-3">
                 <div className="flex-1 h-px bg-stone-200" />
                 <span className="text-[11px] font-bold text-[#9C6644] px-2 py-0.5 rounded-full bg-stone-100">
-                  या अपनी खुद की कीमत डालें
+                  {t("pricing_or_custom")}
                 </span>
                 <div className="flex-1 h-px bg-stone-200" />
               </div>
@@ -1001,7 +1222,7 @@ Output ONLY valid JSON matching this schema:
               <div className="p-3.5 rounded-2xl bg-white border border-[#E0C8B5] space-y-3 shadow-xs">
                 <div>
                   <label className="block text-xs font-bold text-[#3D1F0F] mb-1">
-                    विकल्प 2: अपनी बिक्री कीमत (Your Price in ₹)
+                    {t("pricing_option2_label")}
                   </label>
                   <div className="flex items-center rounded-xl overflow-hidden border-2 border-[#C4886B] bg-[#FFFBF7] px-3 py-1">
                     <span className="text-lg font-bold text-[#6B3A2A] mr-1">₹</span>
@@ -1016,7 +1237,7 @@ Output ONLY valid JSON matching this schema:
                 </div>
 
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] text-stone-500 font-medium">सुझाव:</span>
+                  <span className="text-[10px] text-stone-500 font-medium">{t("pricing_suggestions_label")}</span>
                   {[150, 200, 250, 350].map((quickAmt) => (
                     <button
                       key={quickAmt}
@@ -1038,7 +1259,9 @@ Output ONLY valid JSON matching this schema:
                 >
                   <span>✓</span>
                   <span>
-                    {manualPriceInput ? `₹${manualPriceInput} की कीमत से जोड़ें` : "कीमत दर्ज करें"}
+                    {manualPriceInput
+                      ? t("pricing_add_with_price").replace("{price}", manualPriceInput)
+                      : t("pricing_enter_price_prompt")}
                   </span>
                 </button>
               </div>
@@ -1046,53 +1269,21 @@ Output ONLY valid JSON matching this schema:
           </div>
         )}
 
-        {/* ── 🚪 LOGOUT CONFIRMATION POPUP MODAL ── */}
-        {showLogoutConfirm && (
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-5 z-50 animate-fade-in">
-            <div
-              className="bg-[#FFFDF9] w-full max-w-xs rounded-3xl p-5 space-y-4 border-2 border-[#C4886B] shadow-2xl text-center animate-slide-up"
-              style={{ fontFamily: "'Poppins', sans-serif" }}
-            >
-              <div className="w-14 h-14 rounded-2xl bg-amber-100 border border-amber-300 text-2xl flex items-center justify-center mx-auto shadow-xs">
-                🚪
-              </div>
-
-              <div className="space-y-1">
-                <h3
-                  className="text-lg font-bold text-[#3D1F0F]"
-                  style={{ fontFamily: "'Noto Serif', serif" }}
-                >
-                  क्या आप बाहर निकलना चाहते हैं?
-                </h3>
-                <p className="text-xs text-[#8B4513] leading-relaxed">
-                  अगर आप अभी बाहर जाएंगे तो आपको दोबारा लॉगिन करना होगा।
-                </p>
-              </div>
-
-              <div className="space-y-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setShowLogoutConfirm(false)}
-                  className="w-full py-3 rounded-2xl font-bold text-sm text-white shadow-md active:scale-98 transition cursor-pointer"
-                  style={{ background: "linear-gradient(135deg, #8B4513 0%, #6B3A2A 100%)" }}
-                >
-                  नहीं, यहीं सामान जोड़ें (Stay Here)
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowLogoutConfirm(false);
-                    handleSellerLogout();
-                  }}
-                  className="w-full py-2.5 rounded-2xl font-bold text-xs text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 active:scale-98 transition cursor-pointer"
-                >
-                  हाँ, बाहर निकलें (लॉगआउट)
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* ── 🚪 BACK CONFIRMATION MODAL (Decoupled from Logout) ── */}
+        <ConfirmationModal
+          isOpen={showBackConfirm}
+          onClose={() => setShowBackConfirm(false)}
+          onConfirm={() => {
+            setShowBackConfirm(false);
+            setScreen("dashboard");
+          }}
+          title={t("confirm_leave_title")}
+          message={t("confirm_leave_message")}
+          cancelText={t("confirm_stay_button")}
+          confirmText={t("confirm_leave_button")}
+          icon="🚪"
+          confirmVariant="danger"
+        />
       </div>
     </div>
   );

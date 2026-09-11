@@ -1,22 +1,31 @@
-// src/CatalogPreview.tsx
 import React, { useState } from "react";
+import { useLanguage } from "./context/LanguageContext";
+import { getDisplayTitle, getLocalizedProductContent, LocalizedContentMap } from "./utils/artisanAiService";
 
 export interface CatalogData {
   title_hi: string;
   title_en: string;
+  title_local?: string;
   suggested_price: number;
   imageUrl?: string;
+  imageSignature?: string;
   artisan_name?: string;
   artisan_region?: string;
   quick_summary_hi?: string;
   quick_summary_en?: string;
+  quick_summary_local?: string;
   story_hi?: string;
   story_en?: string;
+  story_local?: string;
   highlights_hi?: string[];
   highlights_en?: string[];
+  highlights_local?: string[];
   specs_hi?: Array<{ label: string; value: string }>;
   specs_en?: Array<{ label: string; value: string }>;
+  specs_local?: Array<{ label: string; value: string }>;
   tags?: string[];
+  language?: string;
+  localizedContent?: LocalizedContentMap;
 }
 
 export interface CatalogPreviewProps {
@@ -32,35 +41,16 @@ export default function CatalogPreview({
   onCheckout,
   onEdit,
 }: CatalogPreviewProps) {
-  const [activeTab, setActiveTab] = useState<"hi" | "en">("hi");
+  const { t, currentLang, languages } = useLanguage();
+  const activeLangMeta = languages?.find((l) => l.code === currentLang) || {
+    code: "hi",
+    nativeName: "हिन्दी",
+    englishName: "Hindi",
+    speechLang: "hi-IN",
+  };
 
-  const defaultStoryHi =
-    data.story_hi ||
-    `यह हस्तशिल्प भारत की प्राचीन लोक परंपरा और कारीगरी का प्रतीक है। इसे कुशल ग्रामीण कारीगरों द्वारा स्थानीय पर्यावरण-अनुकूल सामग्री और पारंपरिक तकनीकों से तैयार किया गया है, जो घर में सकारात्मक ऊर्जा और सांस्कृतिक सौंदर्य का संचार करता है।`;
-
-  const defaultStoryEn =
-    data.story_en ||
-    `This authentic artisan craft represents centuries of Indian generational heritage. Meticulously shaped and detailed using sustainable, locally sourced materials, it brings timeless cultural aesthetics and soulful elegance to modern living spaces.`;
-
-  const defaultHighlightsHi =
-    data.highlights_hi && data.highlights_hi.length > 0
-      ? data.highlights_hi
-      : [
-          "100% हस्तनिर्मित एवं पर्यावरण-अनुकूल",
-          "पारंपरिक शिल्पकारों द्वारा प्रामाणिक निर्माण",
-          "गृह सज्जा, पूजा एवं सांस्कृतिक उपहार हेतु उपयुक्त",
-        ];
-
-  const defaultHighlightsEn =
-    data.highlights_en && data.highlights_en.length > 0
-      ? data.highlights_en
-      : [
-          "100% Handcrafted from organic, sustainable materials",
-          "Direct from generational rural artisan clusters",
-          "Ideal for aesthetic home decor & mindful gifting",
-        ];
-
-  const isHindi = activeTab === "hi";
+  const isNative = currentLang !== "en";
+  const localized = getLocalizedProductContent(data, currentLang);
 
   return (
     <div
@@ -102,6 +92,8 @@ export default function CatalogPreview({
             onClick={onBack}
             className="w-10 h-10 rounded-full flex items-center justify-center text-white active:scale-95 transition cursor-pointer"
             style={{ background: "rgba(255,255,255,0.12)" }}
+            title={t("go_back")}
+            aria-label={t("go_back")}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
               <path
@@ -118,7 +110,7 @@ export default function CatalogPreview({
               className="text-xl font-bold text-white tracking-wide"
               style={{ fontFamily: "'Noto Serif', serif" }}
             >
-              Preview Listing
+              {t("preview_listing")}
             </h1>
             <p className="text-xs text-white/70 -mt-0.5">Kalakriti AI Catalog</p>
           </div>
@@ -140,19 +132,40 @@ export default function CatalogPreview({
             />
             {/* AI Enhanced Badge */}
             <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-xs px-3 py-1 rounded-full text-[11px] font-bold text-[#6B3A2A] shadow-xs flex items-center gap-1.5 border border-[#C4886B]/20">
-              <span>✨</span>
-              <span>AI सुधारी गई फोटो</span>
+              <span>{t("ai_enhanced_photo")}</span>
             </div>
             {/* ONDC Certified Badge */}
             <div className="absolute top-3 right-3 bg-emerald-700 text-white px-2.5 py-1 rounded-full text-[10px] font-bold shadow-xs flex items-center gap-1">
-              <span>✓</span>
-              <span>ONDC Ready</span>
+              <span>{t("ondc_verified_badge")}</span>
             </div>
             {/* Region Tag */}
             {data.artisan_region && (
               <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-xs text-white text-xs font-medium px-3 py-1 rounded-full">
                 📍 {data.artisan_region}
               </div>
+            )}
+          </div>
+
+          {/* 🏷️ Product Title Card (Prominent Localized Craft Name) */}
+          <div className="bg-white rounded-2xl p-4 shadow-xs border border-[#C4886B]/30 space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#8B4513]">
+                {activeLangMeta.nativeName} Craft
+              </span>
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                ONDC Verified
+              </span>
+            </div>
+            <h3
+              className="text-base font-bold text-[#3D1F0F] leading-snug"
+              style={{ fontFamily: "'Noto Serif', serif" }}
+            >
+              {localized.title || getDisplayTitle(data, currentLang)}
+            </h3>
+            {isNative && data.title_en && (
+              <p className="text-[11px] text-[#8B4513] font-medium pt-0.5">
+                {data.title_en}
+              </p>
             )}
           </div>
 
@@ -163,11 +176,11 @@ export default function CatalogPreview({
                 className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-xs"
                 style={{ background: "#6B3A2A" }}
               >
-                {data.artisan_name ? data.artisan_name[0] : "क"}
+                {data.artisan_name ? data.artisan_name[0] : (localized.artisan_name ? localized.artisan_name[0] : "K")}
               </div>
               <div>
                 <p className="text-xs font-bold text-[#3D1F0F]">
-                  {data.artisan_name || "कुशल कारीगर"} · {data.artisan_region || "भारत"}
+                  {data.artisan_name || localized.artisan_name || t("craft_artisan_default")} · {data.artisan_region || localized.artisan_region || t("craft_region_default")}
                 </p>
               </div>
             </div>
@@ -201,44 +214,31 @@ export default function CatalogPreview({
 
             <div className="bg-emerald-50 border border-emerald-200/80 rounded-xl px-3 py-2 text-center">
               <span className="text-sm font-extrabold text-emerald-800 block leading-tight">
-                40% बचत
+                {t("savings_badge")}
               </span>
               <span className="text-[10px] text-emerald-700 font-semibold block mt-0.5">
-                कारीगर को सीधा लाभ
+                {t("direct_artisan_benefit")}
               </span>
             </div>
           </div>
 
-          {/* 4. Language Segmented Toggle */}
+          {/* 4. Unified Single-Language Description Header */}
           <div
-            className="p-1 rounded-2xl flex gap-1 border"
+            className="px-4 py-2.5 rounded-2xl flex items-center justify-between border shadow-2xs"
             style={{
               background: "#F5EBE1",
               borderColor: "rgba(196,136,107,0.25)",
             }}
           >
-            <button
-              type="button"
-              onClick={() => setActiveTab("hi")}
-              className={`flex-1 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
-                activeTab === "hi"
-                  ? "bg-[#6B3A2A] text-white shadow-sm"
-                  : "text-[#8B4513] hover:text-[#6B3A2A]"
-              }`}
-            >
-              हिंदी विवरण
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("en")}
-              className={`flex-1 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
-                activeTab === "en"
-                  ? "bg-[#6B3A2A] text-white shadow-sm"
-                  : "text-[#8B4513] hover:text-[#6B3A2A]"
-              }`}
-            >
-              English Copy
-            </button>
+            <div className="flex items-center gap-2">
+              <span className="text-sm">📜</span>
+              <span className="text-xs font-bold text-[#6B3A2A]" style={{ fontFamily: "'Noto Serif', serif" }}>
+                {t("artisan_description_tab")}
+              </span>
+            </div>
+            <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/90 px-2 py-0.5 rounded-full border border-emerald-300">
+              {t("ondc_verified_badge")}
+            </span>
           </div>
 
           {/* 5. Quick Headline Hook */}
@@ -248,11 +248,9 @@ export default function CatalogPreview({
           >
             <p
               className="text-xs font-semibold text-[#3D1F0F] leading-relaxed"
-              style={{ fontFamily: isHindi ? "'Noto Serif', serif" : "'Poppins', sans-serif" }}
+              style={{ fontFamily: isNative ? "'Noto Serif', serif" : "'Poppins', sans-serif" }}
             >
-              {isHindi
-                ? data.quick_summary_hi || "पारंपरिक तकनीकों द्वारा हस्तनिर्मित प्रामाणिक भारतीय शिल्प।"
-                : data.quick_summary_en || "Authentic handmade Indian handicraft crafted using generational techniques."}
+              {localized.quick_summary || (isNative ? "पारंपरिक तकनीकों द्वारा हस्तनिर्मित प्रामाणिक भारतीय शिल्प।" : "Authentic handmade Indian handicraft crafted using generational techniques.")}
             </p>
           </div>
 
@@ -270,12 +268,12 @@ export default function CatalogPreview({
                 className="text-xs font-bold uppercase tracking-wider text-[#6B3A2A]"
                 style={{ fontFamily: "'Noto Serif', serif" }}
               >
-                {isHindi ? "विरासत व शिल्प कथा" : "Heritage & Craft Legacy"}
+                {isNative ? t("heritage_story_title") : "Heritage & Craft Legacy"}
               </h4>
             </div>
 
             <p className="text-xs text-[#522919] leading-relaxed font-normal">
-              {isHindi ? defaultStoryHi : defaultStoryEn}
+              {localized.story}
             </p>
           </div>
 
@@ -289,11 +287,11 @@ export default function CatalogPreview({
               style={{ fontFamily: "'Noto Serif', serif" }}
             >
               <span>✨</span>
-              <span>{isHindi ? "मुख्य विशेषताएं" : "Craft Highlights"}</span>
+              <span>{isNative ? t("key_highlights_title") : "Craft Highlights"}</span>
             </h4>
 
             <div className="space-y-1.5">
-              {(isHindi ? defaultHighlightsHi : defaultHighlightsEn).map((point, idx) => (
+              {(localized.highlights && localized.highlights.length > 0 ? localized.highlights : (isNative ? ["100% हस्तनिर्मित एवं पर्यावरण-अनुकूल", "पारंपरिक शिल्पकारों द्वारा प्रामाणिक निर्माण", "गृह सज्जा, पूजा एवं सांस्कृतिक उपहार हेतु उपयुक्त"] : ["100% Handcrafted from organic, sustainable materials", "Direct from generational rural artisan clusters", "Ideal for aesthetic home decor & mindful gifting"])).map((point, idx) => (
                 <div key={idx} className="flex items-start gap-2 text-xs text-[#3D1F0F]">
                   <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">
                     ✓
@@ -315,22 +313,22 @@ export default function CatalogPreview({
                 style={{ fontFamily: "'Noto Serif', serif" }}
               >
                 <span>📋</span>
-                <span>{isHindi ? "उत्पाद विवरण (SPECS)" : "Product Specifications"}</span>
+                <span>{isNative ? t("specs_table_title") : "Product Specifications"}</span>
               </span>
               <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/90 px-2 py-0.5 rounded-full border border-emerald-300">
-                ONDC सत्यापित
+                {t("ondc_verified_badge")}
               </span>
             </div>
 
             <div className="divide-y divide-[#C4886B]/15 text-xs">
-              {(isHindi ? data.specs_hi : data.specs_en)?.map((spec, index) => (
+              {(localized.specs && localized.specs.length > 0 ? localized.specs : (data.specs_en || []))?.map((spec, index) => (
                 <div key={index} className="grid grid-cols-2 px-4 py-2.5">
                   <span className="font-semibold text-[#8B4513]">{spec.label}</span>
                   <span className="text-[#3D1F0F] font-medium text-right">{spec.value}</span>
                 </div>
               )) || (
                 <div className="px-4 py-3 text-center text-xs text-stone-500">
-                  हस्तशिल्प विनिर्देश उपलब्ध हैं।
+                  {t("specs_not_available")}
                 </div>
               )}
             </div>
@@ -381,7 +379,7 @@ export default function CatalogPreview({
               className="py-3.5 px-5 rounded-2xl font-bold text-xs border text-[#6B3A2A] bg-white active:scale-95 transition cursor-pointer shadow-xs"
               style={{ borderColor: "rgba(196,136,107,0.5)" }}
             >
-              Edit
+              {t("edit_button")}
             </button>
           )}
           <button
@@ -394,7 +392,7 @@ export default function CatalogPreview({
             }}
           >
             <span>🚀</span>
-            <span>Approve & Publish</span>
+            <span>{t("approve_and_publish")}</span>
           </button>
         </div>
       </div>

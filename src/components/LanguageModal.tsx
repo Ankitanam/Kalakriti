@@ -57,7 +57,7 @@ export const LanguageModal: React.FC<LanguageModalProps> = ({
                 {t("select_language")}
               </h3>
               <p className="text-[11px] text-stone-500">
-                Choose your preferred language / अपनी भाषा चुनें
+                {t("lang_modal_subtitle")}
               </p>
             </div>
           </div>
@@ -122,7 +122,7 @@ export const LanguageModal: React.FC<LanguageModalProps> = ({
         </div>
 
         <p className="text-[11px] text-center text-stone-400">
-          ✓ वॉइस असिस्टेंट और मेनू इसी भाषा में अनुकूलित हो जाएंगे
+          {t("lang_modal_hint")}
         </p>
       </div>
     </div>

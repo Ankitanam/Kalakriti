@@ -99,14 +99,17 @@ export function searchProductsFuzzy(products: StoreItem[], query: string): Store
   const scoredProducts = products.map((product) => {
     // Searchable text corpus from all product fields
     const fieldsToSearch = [
+      product.title_local || "",
       product.title_hi || "",
       product.title_en || "",
       product.categoryName || "",
       product.artisan_name || "",
       product.artisan_region || "",
+      product.quick_summary_local || "",
       product.quick_summary_hi || "",
       product.quick_summary_en || "",
       ...(product.tags || []),
+      ...(product.specs_local?.map((s) => `${s.label} ${s.value}`) || []),
       ...(product.specs_hi?.map((s) => `${s.label} ${s.value}`) || []),
       ...(product.specs_en?.map((s) => `${s.label} ${s.value}`) || []),
     ].join(" ");

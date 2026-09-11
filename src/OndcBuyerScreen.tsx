@@ -11,6 +11,13 @@ import {
   ConfirmedOrder,
 } from "./utils/becknEngine";
 import { searchProductsFuzzy } from "./utils/fuzzySearch";
+import {
+  getDisplayTitle as getArtisanDisplayTitle,
+  getLocalizedProductContent,
+  ensureProductLocalization,
+  getLocalizedCity,
+} from "./utils/artisanAiService";
+import { LanguageModal } from "./components/LanguageModal";
 
 interface OndcBuyerScreenProps {
   inventory: StoreItem[];
@@ -23,15 +30,42 @@ export default function OndcBuyerScreen({
   onOrderConfirmed,
   onLogout,
 }: OndcBuyerScreenProps) {
-  const { t } = useLanguage();
+  const { t, currentLang, languages } = useLanguage();
+  const activeLangMeta = languages?.find((l) => l.code === currentLang) || {
+    code: "hi",
+    nativeName: "हिन्दी",
+    englishName: "Hindi",
+    speechLang: "hi-IN",
+  };
+
+  const getDisplayTitle = (item: any) => {
+    if (!item) return "";
+    return getArtisanDisplayTitle(item, currentLang);
+  };
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<StoreItem | null>(null);
   const [selectedQty, setSelectedQty] = useState(1);
   const [buyerPlatform, setBuyerPlatform] = useState<"PhonePe Pincode" | "Paytm ONDC">("PhonePe Pincode");
+  const [showLangModal, setShowLangModal] = useState(false);
 
   // 🔍 फुल प्रोडक्ट विवरण स्क्रीन के लिए स्टेट
   const [viewingDetailsProduct, setViewingDetailsProduct] = useState<StoreItem | null>(null);
-  const [detailsSpecsLang, setDetailsSpecsLang] = useState<"hi" | "en">("hi");
+  const [detailsSpecsLang, setDetailsSpecsLang] = useState<"local" | "en">("local");
+
+  // On-demand AI translation for viewingDetailsProduct if needed
+  useEffect(() => {
+    if (viewingDetailsProduct && currentLang !== "en" && currentLang !== "hi") {
+      const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || "";
+      const prodId = viewingDetailsProduct.id;
+      ensureProductLocalization(viewingDetailsProduct, currentLang, apiKey).then((localized) => {
+        setViewingDetailsProduct((prev) => {
+          if (!prev || prev.id !== prodId) return prev;
+          const updatedMap = { ...(prev.localizedContent || {}), [currentLang]: localized };
+          return { ...prev, localizedContent: updatedMap };
+        });
+      });
+    }
+  }, [viewingDetailsProduct?.id, currentLang]);
 
   // 🔄 लाइव इन्वेंट्री स्टेट (सेलर डैशबोर्ड से ऑटोमैटिक सिंक)
   const [liveInventory, setLiveInventory] = useState<StoreItem[]>(() => {
@@ -138,7 +172,7 @@ export default function OndcBuyerScreen({
     const { availableToAdd } = getProductStockInfo(product.id);
 
     if (availableToAdd <= 0) {
-      alert("माफ़ करें! यह सामान विक्रेता के पास स्टॉक में उपलब्ध नहीं है।");
+      alert(t("out_of_stock_alert"));
       return;
     }
 
@@ -168,7 +202,7 @@ export default function OndcBuyerScreen({
     const updated = cart.map((c) => {
       if (c.product.id === productId) {
         if (c.quantity >= maxSellerStock) {
-          alert(`विक्रेता के पास केवल ${maxSellerStock} पीस उपलब्ध हैं!`);
+          alert(t("stock_limit_alert").replace("{count}", String(maxSellerStock)));
           return c;
         }
         return { ...c, quantity: c.quantity + 1 };
@@ -195,12 +229,12 @@ export default function OndcBuyerScreen({
   // ── Step 4 & 5: Save Address, Deduct Stock & Sync Orders (E-Commerce Logic) ──
   const handleFinalOrderPlacement = () => {
     if (!address.fullName || !address.phone || !address.pincode || !address.street) {
-      alert("कृपया पूरा डिलीवरी पता और मोबाइल नंबर भरें!");
+      alert(t("fill_address_alert"));
       return;
     }
 
     if (cart.length === 0) {
-      alert("आपकी कार्ट खाली है!");
+      alert(t("cart_empty_alert"));
       return;
     }
 
@@ -228,7 +262,7 @@ export default function OndcBuyerScreen({
       const currentOrders = JSON.parse(localStorage.getItem("kalakriti_orders") || "[]");
       const newArtisanOrders = cart.map((c) => ({
         orderId: orderResult.orderId,
-        productTitle: c.product.title_hi || "हस्तशिल्प उत्पाद",
+        productTitle: getDisplayTitle(c.product) || "हस्तशिल्प उत्पाद",
         buyerCity: `${address.city} (${address.state})`,
         buyerPlatform: buyerPlatform,
         amount: (Number(c.product.suggested_price) || 199) * c.quantity,
@@ -307,7 +341,8 @@ export default function OndcBuyerScreen({
                 type="button"
                 onClick={onLogout}
                 className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white active:scale-95 transition cursor-pointer"
-                title="लॉगआउट"
+                title={t("logout")}
+                aria-label={t("logout")}
               >
                 ←
               </button>
@@ -322,13 +357,23 @@ export default function OndcBuyerScreen({
               </div>
             </div>
 
-            {/* Cart Icon */}
+            {/* Language Switcher & Cart Icon */}
             <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setShowLangModal(true)}
+                className="px-2 py-1 rounded-lg bg-white/20 hover:bg-white/30 text-white text-xs font-bold flex items-center gap-1 active:scale-95 transition cursor-pointer border border-white/20"
+                title={t("select_language")}
+              >
+                <span>🌐</span>
+                <span className="text-[11px]">{activeLangMeta.nativeName}</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setCheckoutStage("cart")}
                 className="relative w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white active:scale-95 cursor-pointer"
-                title="कार्ट देखें"
+                title={t("your_cart_title").replace(" ({count} सामान)", "")}
               >
                 <span>🛒 </span>
                 {totalCartCount > 0 && (
@@ -346,7 +391,7 @@ export default function OndcBuyerScreen({
                 }
                 className="text-[10px] font-bold bg-white/20 px-2 py-1.5 rounded-lg border border-white/30 active:scale-95 cursor-pointer"
               >
-                स्विच ⇄
+                {t("switch_role")}
               </button>
             </div>
           </div>
@@ -377,7 +422,7 @@ export default function OndcBuyerScreen({
         <div className="bg-purple-100 border-b border-purple-200 px-4 py-1.5 flex items-center justify-between text-[11px] text-purple-900 font-semibold">
           <span className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            ONDC ओपन नेटवर्क लाइव फ़ीड
+            {t("ondc_open_feed")}
           </span>
           <span className="text-[10px] text-purple-700 font-mono">Beckn v1.1 • nic2004:52110</span>
         </div>
@@ -394,8 +439,8 @@ export default function OndcBuyerScreen({
           {filteredProducts.length === 0 ? (
             <div className="text-center py-16 text-slate-400">
               <p className="text-3xl mb-2">🔍 </p>
-              <p className="text-sm font-semibold">&apos;{searchQuery}&apos; से मिलता-जुलता कोई सामान नहीं मिला</p>
-              <p className="text-xs mt-1">कृपया कोई अन्य शब्द जैसे &apos;मिट्टी&apos;, &apos;painting&apos; खोजें।</p>
+              <p className="text-sm font-semibold">{t("no_items_found_query").replace("{query}", searchQuery)}</p>
+              <p className="text-xs mt-1">{t("search_suggestion_hint")}</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3">
@@ -422,7 +467,7 @@ export default function OndcBuyerScreen({
                         }`}
                       />
                       <span className="absolute bottom-1.5 left-1.5 bg-black/60 text-white text-[8px] font-bold px-1.5 py-0.5 rounded">
-                        {item.artisan_region || "भारत"}
+                        {item.artisan_region || t("craft_region_default")}
                       </span>
                       <span
                         className={`absolute top-1.5 left-1.5 text-[8px] font-bold px-1.5 py-0.5 rounded shadow-xs ${
@@ -441,8 +486,10 @@ export default function OndcBuyerScreen({
                       onClick={() => setViewingDetailsProduct(item)}
                     >
                       <div>
-                        <h4 className="text-xs font-bold text-slate-900 line-clamp-1">{item.title_hi}</h4>
-                        <p className="text-[10px] text-slate-500 line-clamp-1 mt-0.5">{item.title_en}</p>
+                        <h4 className="text-xs font-bold text-slate-900 line-clamp-1">{getDisplayTitle(item)}</h4>
+                        <p className="text-[10px] text-slate-500 line-clamp-1 mt-0.5">
+                          {currentLang === "en" ? (item.title_local || item.title_hi) : item.title_en}
+                        </p>
                         <div className="flex items-baseline gap-1 mt-1">
                           <span className="text-xs font-extrabold text-slate-900">₹{item.suggested_price}</span>
                           <span className="text-[9px] text-emerald-700 bg-emerald-50 px-1 rounded font-bold">
@@ -503,12 +550,12 @@ export default function OndcBuyerScreen({
                   🛒
                 </div>
                 <div>
-                  <p className="text-xs font-bold">{totalCartCount} सामान कार्ट में</p>
-                  <p className="text-[10px] text-white/80">कुल: ₹{cartQuote.totalPrice}</p>
+                  <p className="text-xs font-bold">{t("cart_items_count").replace("{count}", String(totalCartCount))}</p>
+                  <p className="text-[10px] text-white/80">{t("cart_total_amount").replace("{amount}", String(cartQuote.totalPrice))}</p>
                 </div>
               </div>
               <div className="flex items-center gap-1 text-xs font-bold bg-white text-slate-900 px-3 py-1.5 rounded-xl shadow-xs">
-                <span>चेकआउट करें</span>
+                <span>{t("checkout_action")}</span>
                 <span>➔</span>
               </div>
             </div>
@@ -564,131 +611,144 @@ export default function OndcBuyerScreen({
                 </div>
               </div>
 
-              {/* टाइटल और मूल्य */}
-              <div className="bg-white rounded-2xl p-4 shadow-xs border border-purple-100 space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <h3
-                      className="text-lg font-bold text-stone-900 leading-snug"
-                      style={{ fontFamily: "'Noto Serif', serif" }}
-                    >
-                      {viewingDetailsProduct.title_hi}
-                    </h3>
-                    <p className="text-xs text-stone-500 mt-0.5">
-                      {viewingDetailsProduct.title_en}
-                    </p>
-                  </div>
-                  <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg flex-shrink-0">
-                    {t("savings_badge")}
-                  </span>
-                </div>
+              {/* विवरण, कथा व विनिर्देश */}
+              {(() => {
+                const targetLangCode = detailsSpecsLang === "local" ? currentLang : "en";
+                const altLangCode = detailsSpecsLang === "local" ? "en" : currentLang;
+                const activeContent = getLocalizedProductContent(viewingDetailsProduct, targetLangCode);
+                const altContent = getLocalizedProductContent(viewingDetailsProduct, altLangCode);
 
-                <div className="flex items-baseline gap-2.5 pt-1">
-                  <span className="text-2xl font-extrabold text-[#5B21B6]">
-                    ₹{viewingDetailsProduct.suggested_price}
-                  </span>
-                  <span className="text-sm text-stone-400 line-through">
-                    ₹{Math.round((Number(viewingDetailsProduct.suggested_price) || 199) * 1.4)}
-                  </span>
-                  <span className="text-xs text-stone-500 font-medium ml-auto">
-                    {t("stock_available_pcs").replace("{count}", String(Math.max(0, Number(viewingDetailsProduct.quantity ?? 0))))}
-                  </span>
-                </div>
-              </div>
+                return (
+                  <>
+                    {/* टाइटल और मूल्य */}
+                    <div className="bg-white rounded-2xl p-4 shadow-xs border border-purple-100 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <h3
+                            className="text-lg font-bold text-stone-900 leading-snug"
+                            style={{ fontFamily: "'Noto Serif', serif" }}
+                          >
+                            {activeContent.title}
+                          </h3>
+                          {altContent.title && altContent.title !== activeContent.title && (
+                            <p className="text-xs text-stone-500 mt-0.5">
+                              {altContent.title}
+                            </p>
+                          )}
+                        </div>
+                        <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg flex-shrink-0">
+                          {t("savings_badge")}
+                        </span>
+                      </div>
 
-              {/* कारीगर कार्ड */}
-              <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-2xl p-4 border border-purple-200/70 flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-[#5B21B6] text-white flex items-center justify-center text-xl shadow-xs">
-                  🏺
-                </div>
-                <div className="flex-1">
-                  <p className="text-[10px] text-purple-700 font-bold uppercase tracking-wider">
-                    {t("artisan_maker_title")}
-                  </p>
-                  <h4
-                    className="text-sm font-bold text-stone-900"
-                    style={{ fontFamily: "'Noto Serif', serif" }}
-                  >
-                    {viewingDetailsProduct.artisan_name || "कुशल ग्रामीण कारीगर"}
-                  </h4>
-                  <p className="text-xs text-stone-600">
-                    {viewingDetailsProduct.artisan_region || "पारंपरिक शिल्प क्लस्टर"}
-                  </p>
-                </div>
-              </div>
-
-              {/* विवरण */}
-              <div className="bg-white rounded-2xl p-4 shadow-xs border border-purple-100 space-y-2">
-                <h4
-                  className="text-sm font-bold text-stone-900 flex items-center gap-1.5"
-                  style={{ fontFamily: "'Noto Serif', serif" }}
-                >
-                  <span>📜</span>
-                  <span>{t("item_description_title")}</span>
-                </h4>
-                <p className="text-xs text-stone-700 leading-relaxed">
-                  {viewingDetailsProduct.quick_summary_hi || "पारंपरिक हस्तनिर्मित प्रामाणिक उत्पाद।"}
-                </p>
-                {viewingDetailsProduct.quick_summary_en && (
-                  <p className="text-[11px] text-stone-500 leading-relaxed italic border-t border-stone-100 pt-2">
-                    {viewingDetailsProduct.quick_summary_en}
-                  </p>
-                )}
-              </div>
-
-              {/* विनिर्देश तालिका */}
-              <div className="bg-white rounded-2xl p-4 shadow-xs border border-purple-100 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h4
-                    className="text-sm font-bold text-stone-900"
-                    style={{ fontFamily: "'Noto Serif', serif" }}
-                  >
-                    {t("key_highlights_title")}
-                  </h4>
-                  <div className="flex bg-purple-100/70 p-0.5 rounded-lg text-[10px] font-bold">
-                    <button
-                      type="button"
-                      onClick={() => setDetailsSpecsLang("hi")}
-                      className={`px-2 py-0.5 rounded-md transition cursor-pointer ${
-                        detailsSpecsLang === "hi"
-                          ? "bg-[#5B21B6] text-white shadow-xs"
-                          : "text-purple-800"
-                      }`}
-                    >
-                      हिंदी
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDetailsSpecsLang("en")}
-                      className={`px-2 py-0.5 rounded-md transition cursor-pointer ${
-                        detailsSpecsLang === "en"
-                          ? "bg-[#5B21B6] text-white shadow-xs"
-                          : "text-purple-800"
-                      }`}
-                    >
-                      English
-                    </button>
-                  </div>
-                </div>
-
-                <div className="divide-y divide-purple-50 text-xs">
-                  {(detailsSpecsLang === "hi"
-                    ? viewingDetailsProduct.specs_hi
-                    : viewingDetailsProduct.specs_en
-                  )?.map((spec, i) => (
-                    <div key={i} className="py-2 flex justify-between gap-4">
-                      <span className="text-stone-500 font-medium">{spec.label}</span>
-                      <span className="text-stone-900 font-semibold text-right">
-                        {spec.value}
-                      </span>
+                      <div className="flex items-baseline gap-2.5 pt-1">
+                        <span className="text-2xl font-extrabold text-[#5B21B6]">
+                          ₹{viewingDetailsProduct.suggested_price}
+                        </span>
+                        <span className="text-sm text-stone-400 line-through">
+                          ₹{Math.round((Number(viewingDetailsProduct.suggested_price) || 199) * 1.4)}
+                        </span>
+                        <span className="text-xs text-stone-500 font-medium ml-auto">
+                          {t("stock_available_pcs").replace("{count}", String(Math.max(0, Number(viewingDetailsProduct.quantity ?? 0))))}
+                        </span>
+                      </div>
                     </div>
-                  )) || (
-                    <p className="text-xs text-stone-400 py-2">
-                      {t("specs_not_available")}
-                    </p>
-                  )}
-                </div>
-              </div>
+
+                    {/* कारीगर कार्ड */}
+                    <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-2xl p-4 border border-purple-200/70 flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-2xl bg-[#5B21B6] text-white flex items-center justify-center text-xl shadow-xs">
+                        🏺
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-[10px] text-purple-700 font-bold uppercase tracking-wider">
+                          {t("artisan_maker_title")}
+                        </p>
+                        <h4
+                          className="text-sm font-bold text-stone-900"
+                          style={{ fontFamily: "'Noto Serif', serif" }}
+                        >
+                          {viewingDetailsProduct.artisan_name || t("craft_artisan_default")}
+                        </h4>
+                        <p className="text-xs text-stone-600">
+                          {viewingDetailsProduct.artisan_region || t("craft_cluster_default")}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* विरासत कथा */}
+                    <div className="bg-white rounded-2xl p-4 shadow-xs border border-purple-100 space-y-2">
+                      <h4
+                        className="text-sm font-bold text-stone-900 flex items-center gap-1.5"
+                        style={{ fontFamily: "'Noto Serif', serif" }}
+                      >
+                        <span>📜</span>
+                        <span>{t("heritage_story_title")}</span>
+                      </h4>
+                      <p className="text-xs text-stone-700 leading-relaxed">
+                        {activeContent.story || activeContent.quick_summary}
+                      </p>
+                      {activeContent.quick_summary && activeContent.quick_summary !== activeContent.story && (
+                        <p className="text-[11px] text-stone-500 leading-relaxed italic border-t border-stone-100 pt-2">
+                          {activeContent.quick_summary}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* विनिर्देश तालिका */}
+                    <div className="bg-white rounded-2xl p-4 shadow-xs border border-purple-100 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4
+                          className="text-sm font-bold text-stone-900"
+                          style={{ fontFamily: "'Noto Serif', serif" }}
+                        >
+                          {t("specs_table_title")}
+                        </h4>
+                        <div className="flex bg-purple-100/70 p-0.5 rounded-lg text-[10px] font-bold">
+                          <button
+                            type="button"
+                            onClick={() => setDetailsSpecsLang("local")}
+                            className={`px-2 py-0.5 rounded-md transition cursor-pointer ${
+                              detailsSpecsLang === "local"
+                                ? "bg-[#5B21B6] text-white shadow-xs"
+                                : "text-purple-800"
+                            }`}
+                          >
+                            {activeLangMeta.nativeName}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDetailsSpecsLang("en")}
+                            className={`px-2 py-0.5 rounded-md transition cursor-pointer ${
+                              detailsSpecsLang === "en"
+                                ? "bg-[#5B21B6] text-white shadow-xs"
+                                : "text-purple-800"
+                            }`}
+                          >
+                            English
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="divide-y divide-purple-50 text-xs">
+                        {activeContent.specs && activeContent.specs.length > 0 ? (
+                          activeContent.specs.map((spec, i) => (
+                            <div key={i} className="py-2 flex justify-between gap-4">
+                              <span className="text-stone-500 font-medium">{spec.label}</span>
+                              <span className="text-stone-900 font-semibold text-right">
+                                {spec.value}
+                              </span>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-xs text-stone-400 py-2">
+                            {t("specs_not_available")}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
 
             {/* बॉटम स्टिकी बार */}
@@ -744,7 +804,7 @@ export default function OndcBuyerScreen({
                     className="w-16 h-16 rounded-xl object-cover"
                   />
                   <div>
-                    <h3 className="text-sm font-bold text-slate-900">{selectedProduct.title_hi}</h3>
+                    <h3 className="text-sm font-bold text-slate-900">{getDisplayTitle(selectedProduct)}</h3>
                     <p className="text-xs text-slate-500">{t("artisan_label")} {selectedProduct.artisan_name}</p>
                     <p className="text-sm font-extrabold text-emerald-700 mt-0.5">
                       ₹{selectedProduct.suggested_price}
@@ -849,7 +909,7 @@ export default function OndcBuyerScreen({
               <div className="flex justify-between items-center border-b pb-2.5">
                 <div className="flex items-center gap-2">
                   <span className="text-lg">🛒 </span>
-                  <h3 className="text-sm font-bold text-slate-900">आपकी कार्ट ({totalCartCount} सामान)</h3>
+                  <h3 className="text-sm font-bold text-slate-900">{t("your_cart_title").replace("{count}", String(totalCartCount))}</h3>
                 </div>
                 <button
                   type="button"
@@ -896,7 +956,7 @@ export default function OndcBuyerScreen({
                               className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
                             />
                             <div className="min-w-0">
-                              <p className="text-xs font-bold text-slate-800 truncate">{c.product.title_hi}</p>
+                              <p className="text-xs font-bold text-slate-800 truncate">{getDisplayTitle(c.product)}</p>
                               <p className="text-[10px] text-slate-500">₹{c.product.suggested_price} × {c.quantity}</p>
                             </div>
                           </div>
@@ -931,13 +991,13 @@ export default function OndcBuyerScreen({
                   {/* Price Quote Breakdown */}
                   <div className="p-3 bg-purple-50/60 rounded-2xl border border-purple-200 text-xs space-y-1.5">
                     <div className="flex justify-between text-slate-600">
-                      <span>सामान का कुल मूल्य</span>
+                      <span>{t("items_total_value")}</span>
                       <span>₹{cartQuote.itemTotal}</span>
                     </div>
                     <div className="flex justify-between text-slate-600">
-                      <span>कूरियर (India Post डाक घर)</span>
+                      <span>{t("courier_india_post")}</span>
                       <span className={cartQuote.deliveryFee === 0 ? "text-emerald-700 font-bold" : ""}>
-                        {cartQuote.deliveryFee === 0 ? "फ्री (₹499+ प्रोमो)" : `₹${cartQuote.deliveryFee}`}
+                        {cartQuote.deliveryFee === 0 ? t("courier_free_promo") : `₹${cartQuote.deliveryFee}`}
                       </span>
                     </div>
                     <div className="flex justify-between font-extrabold text-slate-900 text-sm border-t border-purple-200/80 pt-1">
@@ -978,10 +1038,10 @@ export default function OndcBuyerScreen({
                     onClick={() => setCheckoutStage("cart")}
                     className="text-xs text-purple-700 font-bold hover:underline cursor-pointer"
                   >
-                    ← कार्ट
+                    {t("back_to_cart")}
                   </button>
                   <span className="text-slate-300">|</span>
-                  <h3 className="text-sm font-bold text-slate-900">डिलीवरी पता (Beckn on_init)</h3>
+                  <h3 className="text-sm font-bold text-slate-900">{t("delivery_address_header")}</h3>
                 </div>
                 <button
                   type="button"
@@ -995,19 +1055,19 @@ export default function OndcBuyerScreen({
               {/* Delivery Address Form */}
               <div className="space-y-2 text-xs">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-0.5">पूरा नाम (Full Name)</label>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-0.5">{t("full_name_label")}</label>
                   <input
                     type="text"
                     value={address.fullName}
                     onChange={(e) => setAddress({ ...address, fullName: e.target.value })}
                     className="w-full p-2.5 rounded-xl border border-slate-300 bg-slate-50 outline-none focus:border-purple-600"
-                    placeholder="उदा. रोहन शर्मा"
+                    placeholder="Rohan Sharma"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">मोबाइल नंबर</label>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">{t("mobile_label")}</label>
                     <input
                       type="tel"
                       value={address.phone}
@@ -1017,7 +1077,7 @@ export default function OndcBuyerScreen({
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">पिनकोड (Pincode)</label>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">{t("pincode_label")}</label>
                     <input
                       type="text"
                       value={address.pincode}
@@ -1029,19 +1089,19 @@ export default function OndcBuyerScreen({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-0.5">मकान नं. व सड़क का नाम</label>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-0.5">{t("house_street_label")}</label>
                   <input
                     type="text"
                     value={address.street}
                     onChange={(e) => setAddress({ ...address, street: e.target.value })}
                     className="w-full p-2.5 rounded-xl border border-slate-300 bg-slate-50 outline-none focus:border-purple-600"
-                    placeholder="फ्लैट 402, शांति हाइट्स, हिल रोड"
+                    placeholder="Flat 402, Shanti Heights, Hill Road"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">शहर (City)</label>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">{t("city_label")}</label>
                     <input
                       type="text"
                       value={address.city}
@@ -1050,7 +1110,7 @@ export default function OndcBuyerScreen({
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">राज्य (State)</label>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">{t("state_label")}</label>
                     <input
                       type="text"
                       value={address.state}
@@ -1064,7 +1124,7 @@ export default function OndcBuyerScreen({
               {/* Logistics Provider Selection */}
               <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
                 <p className="text-xs font-bold text-slate-800 flex items-center justify-between">
-                  <span>🚚 कूरियर पार्टनर:</span>
+                  <span>{t("courier_partner_title")}</span>
                   <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100 px-1.5 py-0.5 rounded">
                     ETA: {formattedEta}
                   </span>
@@ -1080,7 +1140,7 @@ export default function OndcBuyerScreen({
                     }}
                   >
                     <p className="font-bold text-slate-900 text-[11px]">🇮🇳 India Post</p>
-                    <p className="text-[10px] text-slate-500">स्पीड पोस्ट (3 दिन)</p>
+                    <p className="text-[10px] text-slate-500">{t("speed_post_sub")}</p>
                   </button>
 
                   <button
@@ -1093,7 +1153,7 @@ export default function OndcBuyerScreen({
                     }}
                   >
                     <p className="font-bold text-slate-900 text-[11px]">⚡ Delhivery</p>
-                    <p className="text-[10px] text-slate-500">एक्सप्रेस (2 दिन)</p>
+                    <p className="text-[10px] text-slate-500">{t("delhivery_express_sub")}</p>
                   </button>
                 </div>
               </div>
@@ -1125,31 +1185,31 @@ export default function OndcBuyerScreen({
                 ✓
               </div>
               <div>
-                <h3 className="text-lg font-bold text-slate-900">🎉 आर्डर सफलतापूर्वक दर्ज हुआ!</h3>
+                <h3 className="text-lg font-bold text-slate-900">{t("order_confirmed_title")}</h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  आर्डर आईडी: <span className="font-mono font-bold text-purple-800">{confirmedOrderDetails.orderId}</span>
+                  {t("order_id_label")} <span className="font-mono font-bold text-purple-800">{confirmedOrderDetails.orderId}</span>
                 </p>
               </div>
 
               <div className="p-3.5 bg-purple-50 rounded-2xl border border-purple-200 text-left text-xs space-y-1.5">
                 <div className="flex justify-between font-bold text-purple-900">
-                  <span>अनुमानित डिलीवरी (ETA):</span>
+                  <span>{t("eta_label")}</span>
                   <span>{confirmedOrderDetails.estimatedDeliveryDate}</span>
                 </div>
                 <p className="text-[11px] text-slate-600">
-                  कूरियर: <span className="font-semibold text-slate-900">{confirmedOrderDetails.courierName}</span>
+                  {t("courier_label")} <span className="font-semibold text-slate-900">{confirmedOrderDetails.courierName}</span>
                 </p>
                 <p className="text-[11px] text-slate-600">
-                  डिलीवरी पता: {confirmedOrderDetails.deliveryAddress.street}, {confirmedOrderDetails.deliveryAddress.city}
+                  {t("delivery_address_label")} {confirmedOrderDetails.deliveryAddress.street}, {confirmedOrderDetails.deliveryAddress.city}
                 </p>
                 <div className="border-t border-purple-200/80 pt-1 flex justify-between text-emerald-800 font-bold">
-                  <span>कुल भुगतान:</span>
+                  <span>{t("total_paid_label")}</span>
                   <span>₹{confirmedOrderDetails.quote.totalPrice}</span>
                 </div>
               </div>
 
               <div className="p-2.5 bg-emerald-50 rounded-xl border border-emerald-200 text-[11px] text-emerald-800 font-semibold">
-                ✓ ₹{confirmedOrderDetails.quote.artisanShare} की राशि सीधे कारीगर के जन-धन बैंक खाते में ट्रांसफर कर दी गई है!
+                {t("artisan_payout_notice").replace("{amount}", String(confirmedOrderDetails.quote.artisanShare))}
               </div>
 
               <button
@@ -1163,7 +1223,7 @@ export default function OndcBuyerScreen({
                       : "linear-gradient(135deg, #0284C7 0%, #0369A1 100%)",
                 }}
               >
-                खरीदारी जारी रखें (Continue Shopping)
+                {t("continue_shopping")}
               </button>
             </div>
           </div>
@@ -1179,9 +1239,16 @@ export default function OndcBuyerScreen({
             onClick={onLogout}
             className="text-xs font-bold text-purple-700 hover:text-purple-900 active:scale-95 cursor-pointer"
           >
-            लॉगआउट (Logout)
+            {t("logout")}
           </button>
         </div>
+
+        {/* Language Modal for Buyer */}
+        <LanguageModal
+          isOpen={showLangModal}
+          onClose={() => setShowLangModal(false)}
+          theme="buyer"
+        />
       </div>
     </div>
   );

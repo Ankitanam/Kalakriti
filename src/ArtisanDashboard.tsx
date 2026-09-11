@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { StoreItem } from "./App";
 import { useLanguage } from "./context/LanguageContext";
+import { getDisplayTitle, calculateArtisanEarnings, getRandomBuyerCity, getLocalizedCity } from "./utils/artisanAiService";
 
 export interface OrderItem {
   orderId: string;
@@ -41,7 +42,7 @@ export default function ArtisanDashboard({
   onSwitchToBuyer,
   onLogout,
 }: ArtisanDashboardProps) {
-  const { t } = useLanguage();
+  const { t, currentLang } = useLanguage();
   const [activeTab, setActiveTab] = useState<"products" | "orders" | "earnings">("products");
   const [selectedCertItem, setSelectedCertItem] = useState<StoreItem | null>(null);
 
@@ -57,13 +58,14 @@ export default function ArtisanDashboard({
 
   const orders = propOrders && propOrders.length > 0 ? propOrders : localOrders;
   const totalUnits = inventory.reduce((sum, item) => sum + (item.quantity || 1), 0);
-  const totalRevenue = orders.reduce((sum, o) => sum + o.amount, 0);
+  const earnings = calculateArtisanEarnings(orders);
+  const totalRevenue = earnings.grossSales;
   const pendingOrders = orders.filter((o) => o.status === "Pending").length;
 
   // Simulate Buyer Order (For Judges)
   const handleSimulateBuyerOrder = () => {
     if (inventory.length === 0) {
-      alert("कृपया पहले कम से कम एक सामान जोड़ें!");
+      alert(t("please_add_product_first"));
       return;
     }
 
@@ -73,17 +75,21 @@ export default function ArtisanDashboard({
       "Paytm ONDC",
       "Magicpin",
     ];
-    const cities = ["बेंगलुरु", "दिल्ली", "मुंबई", "पुणे", "हैदराबाद"];
+    const buyerCity = getRandomBuyerCity(currentLang);
+    const localizedTitle =
+      getDisplayTitle(randomProduct, currentLang) ||
+      randomProduct.title_en ||
+      t("craft_catalog_title");
 
     const newOrder: OrderItem = {
       orderId: `ONDC-${Math.floor(1000 + Math.random() * 9000)}`,
-      productTitle: randomProduct.title_hi || "हस्तनिर्मित सामान",
-      buyerCity: cities[Math.floor(Math.random() * cities.length)],
+      productTitle: localizedTitle,
+      buyerCity: buyerCity,
       buyerPlatform: platforms[Math.floor(Math.random() * platforms.length)],
       amount: randomProduct.suggested_price || 199,
       courier: "India Post (डाक घर)",
       status: "Pending",
-      orderDate: "अभी-अभी (Just now)",
+      orderDate: t("just_now"),
     };
 
     const updatedOrders = [newOrder, ...orders];
@@ -91,7 +97,11 @@ export default function ArtisanDashboard({
     localStorage.setItem("kalakriti_orders", JSON.stringify(updatedOrders));
 
     setActiveTab("orders");
-    alert(`🎉 बधाई हो! ONDC (${newOrder.buyerPlatform}) से ${newOrder.buyerCity} के ग्राहक का ₹${newOrder.amount} का नया आर्डर आया!`);
+    const alertMsg = t("order_simulated_alert")
+      .replace("{platform}", newOrder.buyerPlatform)
+      .replace("{city}", newOrder.buyerCity)
+      .replace("{amount}", String(newOrder.amount));
+    alert(alertMsg);
   };
 
   // Dispatch Order Handler
@@ -145,7 +155,7 @@ export default function ArtisanDashboard({
             onClick={onBack}
             className="w-9 h-9 rounded-2xl flex items-center justify-center text-white active:scale-95 transition"
             style={{ background: "rgba(255,255,255,0.15)" }}
-            title="नया सामान जोड़ें पर वापस जाएं"
+            title={t("go_back")}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
               <path d="M15 18l-6-6 6-6" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
@@ -226,7 +236,7 @@ export default function ArtisanDashboard({
             }}
           >
             <span>💰</span>
-            <span>{t("tab_earnings")} (₹{totalRevenue})</span>
+            <span>{t("tab_earnings")} (₹{earnings.artisanShare})</span>
           </button>
         </div>
 
@@ -300,9 +310,11 @@ export default function ArtisanDashboard({
                       <div className="p-2.5 flex-1 flex flex-col justify-between">
                         <div>
                           <h4 className="font-bold text-xs text-[#3D1F0F] line-clamp-1" style={{ fontFamily: "'Noto Serif', serif" }}>
-                            {item.title_hi}
+                            {getDisplayTitle(item, currentLang)}
                           </h4>
-                          <p className="text-[10px] text-[#8B4513] line-clamp-1 mt-0.5">{item.title_en}</p>
+                          <p className="text-[10px] text-[#8B4513] line-clamp-1 mt-0.5">
+                            {currentLang === "en" ? (item.title_local || item.title_hi) : item.title_en}
+                          </p>
                           <div className="flex items-baseline gap-1 mt-1">
                             <span className="text-sm font-extrabold text-[#3D1F0F]">₹{item.suggested_price}</span>
                             <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1 rounded">{t("savings_badge")}</span>
@@ -375,43 +387,64 @@ export default function ArtisanDashboard({
                 </button>
               </div>
 
-              {orders.map((ord) => (
-                <div key={ord.orderId} className="rounded-2xl p-3 bg-white border border-[#EAC9B0] shadow-xs space-y-2">
-                  <div className="flex items-center justify-between border-b border-stone-100 pb-2">
-                    <div>
-                      <span className="text-xs font-bold text-[#3D1F0F]">{ord.productTitle}</span>
-                      <p className="text-[10px] text-[#8B4513]">
-                        {ord.buyerCity} · <span className="font-semibold text-purple-700">{ord.buyerPlatform}</span>
-                      </p>
+              {orders.map((ord) => {
+                const matchedItem = inventory.find(
+                  (inv) =>
+                    inv.suggested_price === ord.amount ||
+                    inv.title_hi === ord.productTitle ||
+                    inv.title_en === ord.productTitle ||
+                    (inv.title_local && inv.title_local === ord.productTitle)
+                );
+                const displayTitle = matchedItem
+                  ? getDisplayTitle(matchedItem, currentLang)
+                  : ord.productTitle;
+
+                return (
+                  <div key={ord.orderId} className="rounded-2xl p-3 bg-white border border-[#EAC9B0] shadow-xs space-y-2">
+                    <div className="flex items-center justify-between border-b border-stone-100 pb-2">
+                      <div>
+                        <span className="text-xs font-bold text-[#3D1F0F]">{displayTitle}</span>
+                        <p className="text-[10px] text-[#8B4513]">
+                          {getLocalizedCity(ord.buyerCity, currentLang)} · <span className="font-semibold text-purple-700">{ord.buyerPlatform}</span>
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-sm font-extrabold text-[#3D1F0F]">₹{ord.amount}</span>
+                        <p className="text-[9px] text-stone-400">
+                          {ord.orderDate?.includes("Just now") || ord.orderDate?.includes("अभी-अभी")
+                            ? t("just_now")
+                            : ord.orderDate}
+                        </p>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <span className="text-sm font-extrabold text-[#3D1F0F]">₹{ord.amount}</span>
-                      <p className="text-[9px] text-stone-400">{ord.orderDate}</p>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <div className="flex items-center gap-1 text-[11px] text-[#6B3A2A]">
+                        <span>🚚</span>
+                        <span className="font-medium">
+                          {ord.courier?.includes("India Post")
+                            ? t("courier_india_post")
+                            : ord.courier}
+                        </span>
+                      </div>
+
+                      {ord.status === "Pending" ? (
+                        <button
+                          type="button"
+                          onClick={() => handleDispatch(ord.orderId)}
+                          className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs active:scale-95 transition"
+                        >
+                          {t("pack_and_dispatch")}
+                        </button>
+                      ) : (
+                        <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-stone-100 text-stone-600 border border-stone-200">
+                          {t("dispatched_courier")}
+                        </span>
+                      )}
                     </div>
                   </div>
-
-                  <div className="flex items-center justify-between pt-1">
-                    <div className="flex items-center gap-1 text-[11px] text-[#6B3A2A]">
-                      <span>🚚</span>
-                      <span className="font-medium">{ord.courier}</span>
-                    </div>
-
-                    {ord.status === "Pending" ? (
-                      <button
-                        type="button"
-                        onClick={() => handleDispatch(ord.orderId)}
-                        className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs active:scale-95 transition"
-                      >
-                        {t("pack_and_dispatch")}
-                      </button>
-                    ) : (
-                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-stone-100 text-stone-600 border border-stone-200">
-                        {t("dispatched_courier")}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -420,7 +453,7 @@ export default function ArtisanDashboard({
             <div className="space-y-3">
               <div className="rounded-2xl p-4 text-white space-y-2" style={{ background: "linear-gradient(135deg, #6B3A2A 0%, #3D1F0F 100%)" }}>
                 <p className="text-[10px] text-white/75 uppercase tracking-wider">{t("net_payout")}</p>
-                <h2 className="text-3xl font-extrabold">₹{Math.round(totalRevenue * 0.85)}</h2>
+                <h2 className="text-3xl font-extrabold">₹{earnings.artisanShare}</h2>
                 <div className="flex items-center justify-between text-[11px] pt-1 border-t border-white/20">
                   <span>{t("jan_dhan_bank")}</span>
                   <span className="bg-emerald-500/30 text-emerald-300 px-2 py-0.5 rounded font-bold">{t("settled_24hrs")}</span>
@@ -434,19 +467,19 @@ export default function ArtisanDashboard({
                 <div className="space-y-1.5 text-xs">
                   <div className="flex justify-between text-emerald-800 font-semibold">
                     <span>{t("artisan_share_85")}</span>
-                    <span>₹{Math.round(totalRevenue * 0.85)}</span>
+                    <span>₹{earnings.artisanShare}</span>
                   </div>
                   <div className="flex justify-between text-stone-500">
                     <span>{t("india_post_delivery_10")}</span>
-                    <span>₹{Math.round(totalRevenue * 0.1)}</span>
+                    <span>₹{earnings.deliveryCharges}</span>
                   </div>
                   <div className="flex justify-between text-stone-500">
                     <span>{t("ondc_network_maintenance_5")}</span>
-                    <span>₹{Math.round(totalRevenue * 0.05)}</span>
+                    <span>₹{earnings.networkCharges}</span>
                   </div>
                   <div className="border-t border-stone-100 pt-1.5 flex justify-between font-extrabold text-[#3D1F0F]">
                     <span>{t("gross_sales")}</span>
-                    <span>₹{totalRevenue}</span>
+                    <span>₹{earnings.grossSales}</span>
                   </div>
                 </div>
               </div>
@@ -477,15 +510,15 @@ export default function ArtisanDashboard({
               <div className="space-y-1.5 text-xs text-[#5A2E12]">
                 <div className="flex justify-between">
                   <span className="text-stone-400">{t("cert_product")}</span>
-                  <span className="font-bold">{selectedCertItem.title_hi}</span>
+                  <span className="font-bold">{getDisplayTitle(selectedCertItem, currentLang)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-stone-400">{t("cert_artisan")}</span>
-                  <span className="font-bold">{selectedCertItem.artisan_name || "माधुरी देवी"}</span>
+                  <span className="font-bold">{selectedCertItem.artisan_name || t("craft_artisan_default")}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-stone-400">{t("cert_region")}</span>
-                  <span className="font-bold">{selectedCertItem.artisan_region || "मिथिला, बिहार"}</span>
+                  <span className="font-bold">{selectedCertItem.artisan_region || t("craft_region_default")}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-stone-400">{t("cert_gi_status")}</span>

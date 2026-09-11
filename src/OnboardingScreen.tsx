@@ -139,7 +139,7 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
                     Kalakriti
                   </span>
                   <span className="text-[10px] text-amber-200 font-medium tracking-wider uppercase block mt-0.5">
-                    {isBuyer ? "ONDC Buyer Mall" : "कारीगर साथी"}
+                    {isBuyer ? "ONDC Buyer Mall" : t("artisan_tagline")}
                   </span>
                 </div>
               </div>
@@ -168,7 +168,7 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
               <div className="absolute bottom-3 left-5 flex items-center gap-1.5 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/20">
                 <span className="text-amber-400 text-xs">✦</span>
                 <span className="text-white text-[11px] font-medium">
-                  {isBuyer ? "सीधे गांव के कारीगरों से खरीदें" : "100% प्रामाणिक भारतीय हस्तशिल्प"}
+                  {isBuyer ? t("welcome_buyer_subtitle") : t("authentic_craft_badge")}
                 </span>
               </div>
             </div>
@@ -279,7 +279,7 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
                 onClick={() => {
                   if (mobile.length === 10) {
                     const testOtp = Math.floor(100000 + Math.random() * 900000);
-                    alert(`डेमो OTP: ${testOtp}`);
+                    alert(`${t("demo_otp_alert")}: ${testOtp}`);
                     setStage("otp");
                   }
                 }}
@@ -300,7 +300,7 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
               <div className="flex items-center gap-3 mb-3">
                 <div className="flex-1 h-px bg-stone-200" />
                 <span className="text-[11px] font-semibold text-stone-400 px-2 py-0.5 rounded-full bg-stone-100">
-                  या
+                  {t("or_divider")}
                 </span>
                 <div className="flex-1 h-px bg-stone-200" />
               </div>
