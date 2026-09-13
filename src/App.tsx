@@ -1,4 +1,4 @@
-// src/App.tsx
+
 import { useLanguage, TranslationKey } from "./context/LanguageContext";
 import { useState, useRef, useEffect } from "react";
 import CatalogPreview, { CatalogData } from "./CatalogPreview";
@@ -10,6 +10,7 @@ import { LanguageDropdown } from "./components/LanguageDropdown";
 import { CartItem, ConfirmedOrder } from "./utils/becknEngine";
 import { areItemsDuplicate, extractCoreKeyword, getDisplayTitle, KNOWN_CRAFT_LOCALIZATIONS, LocalizedContentMap } from "./utils/artisanAiService";
 import { MicPulseRing, AiScannerOverlay } from "./components/motion/MotionPrimitives";
+import GameWorld from "./components/GameWorld";
 
 // Craft Categories
 const CATEGORIES: Array<{ hi: string; en: string; key: TranslationKey }> = [
@@ -138,6 +139,132 @@ const deduplicateInventory = (items: StoreItem[]): StoreItem[] => {
   return merged;
 };
 
+interface MarketplaceProps {
+  inventory: StoreItem[];
+  onEnterFair: () => void;
+  onBack: () => void;
+}
+
+function Marketplace({ inventory, onEnterFair, onBack }: MarketplaceProps) {
+  const availableProducts = inventory.filter((item) => item.quantity > 0);
+
+  return (
+    <div className="min-h-screen bg-[#F8F3ED] text-stone-900">
+      <header className="sticky top-0 z-30 bg-[#5B21B6] px-5 py-4 text-white shadow-lg">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-white/70">Kalakriti</p>
+            <h1 className="text-2xl font-bold">Marketplace</h1>
+          </div>
+          <button
+            type="button"
+            onClick={onBack}
+            className="rounded-full bg-white/15 px-4 py-2 text-sm font-semibold hover:bg-white/25 transition"
+          >
+            ← Customer
+          </button>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-6xl px-5 py-6">
+        <section className="overflow-hidden rounded-3xl bg-gradient-to-r from-violet-900 to-purple-600 p-6 text-white shadow-xl">
+          <p className="text-sm font-semibold uppercase tracking-widest text-white/70">
+            Indian Artisan Marketplace
+          </p>
+          <h2 className="mt-2 text-3xl font-black md:text-5xl">
+            Discover crafts. Meet artisans.
+          </h2>
+          <p className="mt-3 max-w-xl text-white/80">
+            Shop authentic handmade products and step into the virtual craft fair.
+          </p>
+          <button
+            type="button"
+            onClick={onEnterFair}
+            className="mt-6 rounded-2xl bg-white px-6 py-3 font-bold text-violet-900 shadow-lg hover:bg-violet-50 transition"
+          >
+            Enter Craft Fair →
+          </button>
+        </section>
+
+        <div className="mt-7 flex items-end justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-violet-700">
+              ONDC-ready products
+            </p>
+            <h3 className="text-2xl font-bold">Featured Crafts</h3>
+          </div>
+          <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold shadow-sm">
+            {availableProducts.length} products
+          </span>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {availableProducts.map((item) => (
+            <article
+              key={item.id}
+              className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/5"
+            >
+              <div className="aspect-square bg-stone-100">
+                {item.imageUrl ? (
+                  <img
+                    src={item.imageUrl}
+                    alt={item.title_en || item.title_hi || "Handmade craft"}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-5xl">🎨</div>
+                )}
+              </div>
+              <div className="p-4">
+                <h4 className="line-clamp-2 font-bold">
+                  {item.title_en || item.title_hi}
+                </h4>
+                <p className="mt-1 text-xs text-stone-500">
+                  {item.artisan_region || "Indian artisan"}
+                </p>
+                <div className="mt-3 flex items-center justify-between">
+                  <span className="font-extrabold">₹{item.suggested_price}</span>
+                  <span className="text-xs font-semibold text-emerald-700">In stock</span>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function CustomerSide({
+  inventory,
+  onOrderConfirmed,
+  onLogout,
+  onMarketplace,
+}: {
+  inventory: StoreItem[];
+  onOrderConfirmed: (order: ConfirmedOrder, cart: CartItem[]) => void;
+  onLogout: () => void;
+  onMarketplace: () => void;
+}) {
+  return (
+    <div className="relative min-h-screen">
+      <button
+        type="button"
+        onClick={onMarketplace}
+        className="fixed right-4 top-4 z-[100] rounded-full bg-violet-700 px-4 py-2.5 text-sm font-bold text-white shadow-xl ring-2 ring-white hover:bg-violet-800 active:scale-95 transition"
+        aria-label="Open Kalakriti Marketplace"
+      >
+        🛍️ Marketplace
+      </button>
+      <OndcBuyerScreen
+        inventory={inventory}
+        onOrderConfirmed={onOrderConfirmed}
+        onLogout={onLogout}
+      />
+    </div>
+  );
+}
+
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
     try {
@@ -155,7 +282,9 @@ export default function App() {
     }
   });
 
-  const [screen, setScreen] = useState<"onboarding" | "capture" | "preview" | "dashboard" | "buyer">(() => {
+  const [screen, setScreen] = useState<
+  "onboarding" | "capture" | "preview" | "dashboard" | "buyer" | "marketplace"
+>(() => {
     try {
       const loggedIn = localStorage.getItem("artisan_logged_in") === "true";
       const savedRole = localStorage.getItem("user_role");
@@ -165,6 +294,7 @@ export default function App() {
       return "onboarding";
     }
   });
+  const [showGame, setShowGame] = useState(false);
 
   // ── Inventory State (डी-डुप्लीकेशन के साथ ऑटो-क्लीन) ──
   const [inventory, setInventory] = useState<StoreItem[]>(() => {
@@ -406,10 +536,17 @@ export default function App() {
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setSelectedFile(file);
-      setImageSignature(`${file.name}_${file.size}_${file.lastModified}`);
-      setPhotoUrl(URL.createObjectURL(file));
-    }
+  setSelectedFile(file);
+  setImageSignature(`${file.name}_${file.size}_${file.lastModified}`);
+
+  const reader = new FileReader();
+
+  reader.onload = () => {
+    setPhotoUrl(reader.result as string);
+  };
+
+  reader.readAsDataURL(file);
+}
   };
 
   const fileToBase64 = (file: File): Promise<string> => {
@@ -852,22 +989,38 @@ Output ONLY valid JSON matching this schema:
   };
 
   // ── ROUTING ──
+  // 0. 3D Fair
+  if (showGame) {
+    return <GameWorld onExit={() => setShowGame(false)} />;
+  }
   if (!isLoggedIn || screen === "onboarding") {
     return <OnboardingScreen initialRole={activeRole} onLogin={handleLoginSuccess} />;
   }
 
-  // 1. Buyer Marketplace View
+  // 1. Customer side — Marketplace button lives here only
   if (screen === "buyer") {
     return (
-      <OndcBuyerScreen
+      <CustomerSide
         inventory={inventory}
         onOrderConfirmed={handleOrderConfirmedFromBuyer}
         onLogout={handleBuyerLogout}
+        onMarketplace={() => setScreen("marketplace")}
       />
     );
   }
 
-  // 2. Listing Preview Screen
+  // 2. Marketplace — opens the existing 3D fair only after the user clicks Enter Craft Fair
+  if (screen === "marketplace") {
+    return (
+      <Marketplace
+        inventory={inventory}
+        onEnterFair={() => setShowGame(true)}
+        onBack={() => setScreen("buyer")}
+      />
+    );
+  }
+
+  // 3. Listing Preview
   if (screen === "preview" && selectedPreviewItem) {
     return (
       <CatalogPreview
