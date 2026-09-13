@@ -1,4 +1,4 @@
-// src/App.tsx
+
 import { useLanguage, TranslationKey } from "./context/LanguageContext";
 import { useState, useRef, useEffect } from "react";
 import CatalogPreview, { CatalogData } from "./CatalogPreview";
@@ -8,9 +8,20 @@ import OndcBuyerScreen from "./OndcBuyerScreen";
 import ConfirmationModal from "./components/ConfirmationModal";
 import { LanguageDropdown } from "./components/LanguageDropdown";
 import { CartItem, ConfirmedOrder } from "./utils/becknEngine";
-import { areItemsDuplicate, extractCoreKeyword, getDisplayTitle, KNOWN_CRAFT_LOCALIZATIONS, LocalizedContentMap } from "./utils/artisanAiService";
+import { areItemsDuplicate, extractCoreKeyword, getDisplayTitle, getLocalizedProductContent, KNOWN_CRAFT_LOCALIZATIONS, LocalizedContentMap } from "./utils/artisanAiService";
 import { MicPulseRing, AiScannerOverlay } from "./components/motion/MotionPrimitives";
 import { uploadToCloudinaryWithBgRemoval, getCloudinaryTransparentUrl } from "./utils/imageService";
+import GameWorld from "./components/GameWorld";
+import { TiltCard } from "./components/MouseParallax";
+import {
+  useBuyerGamification,
+  awardXp,
+  recordCraftDiscovery,
+  BADGE_DEFINITIONS,
+  getLocalizedLevelTitle,
+  getLocalizedBadge,
+  getLocalizedQuest,
+} from "./utils/gamificationService";
 
 // Craft Categories
 const CATEGORIES: Array<{ hi: string; en: string; key: TranslationKey }> = [
@@ -139,6 +150,494 @@ const deduplicateInventory = (items: StoreItem[]): StoreItem[] => {
   return merged;
 };
 
+interface MarketplaceProps {
+  inventory: StoreItem[];
+  onEnterFair: () => void;
+  onBack: () => void;
+  onAddToCart?: (item: StoreItem) => void;
+}
+
+function Marketplace({ inventory, onEnterFair, onBack, onAddToCart }: MarketplaceProps) {
+  const { t, currentLang } = useLanguage();
+  const gamification = useBuyerGamification();
+  const [selectedDetailItem, setSelectedDetailItem] = useState<StoreItem | null>(null);
+  const [showGamificationModal, setShowGamificationModal] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const availableProducts = inventory.filter((item) => item.quantity > 0);
+
+  const handleQuickAdd = (item: StoreItem, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const localized = getLocalizedProductContent(item, currentLang);
+    if (onAddToCart) {
+      onAddToCart(item);
+    } else {
+      try {
+        const saved = localStorage.getItem("kalakriti_cart");
+        const currentCart: CartItem[] = saved ? JSON.parse(saved) : [];
+        const existing = currentCart.find((c) => c.product.id === item.id);
+        let updated: CartItem[];
+        if (existing) {
+          updated = currentCart.map((c) =>
+            c.product.id === item.id ? { ...c, quantity: c.quantity + 1 } : c
+          );
+        } else {
+          updated = [...currentCart, { product: item, quantity: 1 }];
+        }
+        localStorage.setItem("kalakriti_cart", JSON.stringify(updated));
+        window.dispatchEvent(new Event("storage"));
+      } catch (err) {
+        console.warn("Cart add error:", err);
+      }
+    }
+    awardXp(50, "Added craft from Marketplace");
+    recordCraftDiscovery(item.categoryName || item.title_en || item.title_hi);
+    setToastMessage(`✓ Added "${localized.title}" to cart! (+50 XP)`);
+    setTimeout(() => setToastMessage(null), 2500);
+  };
+
+  return (
+    <div
+      className="size-full flex items-center justify-center"
+      style={{ background: "#EDE9FE", fontFamily: "'Poppins', sans-serif" }}
+    >
+      <div
+        className="relative flex flex-col overflow-hidden bg-[#F8F3ED] text-stone-900"
+        style={{
+          width: "min(390px, 100vw)",
+          height: "min(844px, 100vh)",
+          borderRadius: "clamp(0px, 2vw, 28px)",
+          boxShadow: "0 25px 60px rgba(76, 29, 149, 0.22)",
+        }}
+      >
+        {/* Status Bar */}
+        <div className="flex items-center justify-between px-6 pt-3 pb-1 text-white bg-[#5B21B6] text-xs font-semibold select-none flex-shrink-0">
+          <span>9:41</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px]">5G</span>
+            <div className="w-5 h-2.5 border border-white/80 rounded-xs p-0.5">
+              <div className="h-full bg-white w-3/4 rounded-2xs" />
+            </div>
+          </div>
+        </div>
+
+        {/* ── HEADER (2 Rows, Non-Colliding Responsive Architecture) ── */}
+        <header className="bg-[#5B21B6] px-3.5 py-2 text-white shadow-md flex-shrink-0">
+          {/* Row 1: Back + Brand + Language Dropdown */}
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={onBack}
+              className="rounded-full bg-white/15 px-2.5 py-1 text-xs font-semibold hover:bg-white/25 transition cursor-pointer flex items-center gap-1 flex-shrink-0 active:scale-95"
+              title="Return to Customer Screen"
+            >
+              <span>{t("marketplace_back_customer")}</span>
+            </button>
+
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-base">🛍️</span>
+              <div className="min-w-0">
+                <p className="text-[8px] uppercase tracking-wider text-white/70 leading-none">Kalakriti</p>
+                <h1 className="text-xs font-black leading-tight truncate">Marketplace</h1>
+              </div>
+            </div>
+
+            <div className="flex-shrink-0">
+              <LanguageDropdown theme="buyer" />
+            </div>
+          </div>
+
+          {/* Row 2: Level & XP Pill + Quests Trigger */}
+          <div className="mt-1.5 pt-1.5 border-t border-white/15 flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setShowGamificationModal(true)}
+              className="flex items-center gap-1 bg-amber-400/25 hover:bg-amber-400/35 text-amber-200 border border-amber-300/40 px-2.5 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition active:scale-95 shadow-xs"
+              title="View Explorer Quests & Badges"
+            >
+              <span>✨</span>
+              <span className="text-white font-extrabold">{t("gamification_level")} {gamification.level}</span>
+              <span className="opacity-90">({gamification.xp} {t("gamification_xp")})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowGamificationModal(true)}
+              className="flex items-center gap-1 text-[10px] font-semibold text-white/90 hover:text-white bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded-full transition cursor-pointer active:scale-95"
+            >
+              <span>🏆</span>
+              <span>{t("marketplace_craft_explorer_quests")} ({gamification.badges.length})</span>
+            </button>
+          </div>
+        </header>
+
+        {/* ── Toast Alert ── */}
+        {toastMessage && (
+          <div className="absolute top-20 left-3 right-3 z-40 bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-xl flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-200">
+            <span>🎉</span>
+            <span className="truncate">{toastMessage}</span>
+          </div>
+        )}
+
+        {/* ── MAIN SCROLLABLE CONTENT ── */}
+        <main className="flex-1 overflow-y-auto px-3.5 py-3 space-y-3">
+          {/* Hero Banner */}
+          <section className="overflow-hidden rounded-2xl bg-gradient-to-r from-violet-900 to-purple-700 p-3.5 text-white shadow-md relative">
+            <div className="relative z-10">
+              <p className="text-[9px] font-bold uppercase tracking-widest text-amber-300">
+                {t("marketplace_ondc_ready")} • Indian Crafts
+              </p>
+              <h2 className="mt-1 text-sm font-black leading-tight">
+                {t("marketplace_hero_subtitle")}
+              </h2>
+              <p className="mt-1 text-white/85 text-[11px] leading-relaxed">
+                {t("marketplace_hero_desc")}
+              </p>
+              <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={onEnterFair}
+                  className="rounded-xl bg-white px-3 py-1.5 font-bold text-violet-900 shadow-md hover:bg-amber-50 active:scale-95 transition flex items-center gap-1.5 cursor-pointer text-xs"
+                >
+                  <span>🎪</span>
+                  <span>{t("enter_fair_btn")}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowGamificationModal(true)}
+                  className="rounded-xl bg-white/15 hover:bg-white/25 border border-white/20 px-2.5 py-1.5 font-semibold text-white transition cursor-pointer flex items-center gap-1 text-xs"
+                >
+                  <span>🏆</span>
+                  <span>{t("marketplace_craft_explorer_quests")}</span>
+                </button>
+              </div>
+            </div>
+          </section>
+
+          {/* Section Header */}
+          <div className="flex items-center justify-between px-0.5">
+            <div>
+              <p className="text-[9px] font-bold uppercase tracking-widest text-violet-700">
+                {t("marketplace_ondc_ready")}
+              </p>
+              <h3 className="text-sm font-black text-stone-900 leading-tight">
+                {t("marketplace_featured_crafts")}
+              </h3>
+            </div>
+            <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-stone-700 shadow-xs border border-stone-200">
+              {availableProducts.length} {t("marketplace_products_count")}
+            </span>
+          </div>
+
+          {/* Product Grid (2 columns on mobile, touch-friendly, localized) */}
+          <div className="grid grid-cols-2 gap-2.5">
+            {availableProducts.map((item) => {
+              const localized = getLocalizedProductContent(item, currentLang);
+              return (
+                <TiltCard
+                  key={item.id}
+                  maxTilt={8}
+                  scale={1.01}
+                  className="cursor-pointer overflow-hidden rounded-xl bg-white shadow-xs border border-stone-200 hover:shadow-md transition-all duration-200 flex flex-col justify-between"
+                  onClick={() => {
+                    setSelectedDetailItem(item);
+                    recordCraftDiscovery(item.categoryName || item.title_en || item.title_hi);
+                  }}
+                >
+                  <div className="aspect-square bg-stone-100 overflow-hidden relative group">
+                    {item.imageUrl ? (
+                      <img
+                        src={item.imageUrl}
+                        alt={localized.title}
+                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-3xl">🎨</div>
+                    )}
+                    <span className="absolute top-1.5 right-1.5 rounded-full bg-black/60 backdrop-blur-xs px-1.5 py-0.5 text-[8px] font-bold text-white uppercase tracking-wider">
+                      {t("marketplace_handmade_tag")}
+                    </span>
+                  </div>
+                  <div className="p-2 flex-1 flex flex-col justify-between">
+                    <div>
+                      <h4 className="line-clamp-2 font-bold text-stone-900 text-xs leading-snug">
+                        {localized.title}
+                      </h4>
+                      <p className="mt-1 text-[9px] text-stone-500 flex items-center gap-1 truncate">
+                        <span>📍</span>
+                        <span>{item.artisan_region || "India"}</span>
+                      </p>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between pt-1.5 border-t border-stone-100">
+                      <div>
+                        <span className="text-xs font-black text-stone-900">₹{item.suggested_price}</span>
+                        <p className="text-[8px] font-semibold text-emerald-700">
+                          {t("marketplace_in_stock")} ({item.quantity})
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => handleQuickAdd(item, e)}
+                        className="rounded-lg bg-violet-700 hover:bg-violet-800 text-white px-2 py-1 text-[10px] font-bold shadow-xs transition active:scale-95 cursor-pointer"
+                        title="Add to ONDC Cart (+ Cart)"
+                      >
+                        {t("marketplace_add_cart")} {/* + Cart */}
+                      </button>
+                    </div>
+                  </div>
+                </TiltCard>
+              );
+            })}
+          </div>
+
+          {/* Safe scroll spacing so bottom products are never obscured */}
+          <div className="h-16" />
+        </main>
+
+        {/* ── PRODUCT DETAILS MODAL (In-Shell) ── */}
+        {selectedDetailItem && (() => {
+          const detail = getLocalizedProductContent(selectedDetailItem, currentLang);
+          return (
+            <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3">
+              <div className="bg-white rounded-2xl max-w-sm w-full max-h-[85vh] overflow-y-auto shadow-2xl p-4 relative animate-in fade-in zoom-in-95 duration-200">
+                <button
+                  type="button"
+                  onClick={() => setSelectedDetailItem(null)}
+                  className="absolute top-3.5 right-3.5 w-7 h-7 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 font-bold flex items-center justify-center cursor-pointer text-xs"
+                >
+                  ✕
+                </button>
+
+                <div className="aspect-video w-full rounded-xl overflow-hidden bg-stone-100 mb-3">
+                  {selectedDetailItem.imageUrl ? (
+                    <img
+                      src={selectedDetailItem.imageUrl}
+                      alt={detail.title}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-4xl">🎨</div>
+                  )}
+                </div>
+
+                <div className="space-y-2.5">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-violet-700">
+                      {selectedDetailItem.artisan_name || "Indian Master Artisan"} • {selectedDetailItem.artisan_region || "India"}
+                    </p>
+                    <h3 className="text-base font-black text-stone-900 mt-0.5">
+                      {detail.title}
+                    </h3>
+                  </div>
+
+                  <p className="text-stone-600 text-xs leading-relaxed">
+                    {detail.story || detail.quick_summary || "Handcrafted with generational mastery using traditional indigenous methods."}
+                  </p>
+
+                  <div className="flex items-center justify-between pt-3 border-t border-stone-100">
+                    <div>
+                      <span className="text-lg font-black text-stone-900">
+                        ₹{selectedDetailItem.suggested_price}
+                      </span>
+                      <p className="text-[10px] text-emerald-700 font-semibold">
+                        {t("marketplace_in_stock")}: {selectedDetailItem.quantity}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleQuickAdd(selectedDetailItem);
+                        setSelectedDetailItem(null);
+                      }}
+                      className="rounded-xl bg-violet-700 hover:bg-violet-800 text-white font-bold px-4 py-2 text-xs shadow-md active:scale-95 transition cursor-pointer"
+                    >
+                      {t("marketplace_add_cart")} 🛒
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ── GAMIFICATION QUESTS & BADGES MODAL (In-Shell) ── */}
+        {showGamificationModal && (
+          <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3">
+            <div className="bg-white rounded-2xl max-w-sm w-full p-4 max-h-[85vh] overflow-y-auto shadow-2xl border border-stone-200 animate-in fade-in zoom-in-95 duration-200">
+              <div className="flex items-center justify-between pb-3 border-b border-stone-100">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xl">🏆</span>
+                  <div>
+                    <h3 className="font-black text-stone-900 text-sm">
+                      {t("gamification_quests")}
+                    </h3>
+                    <p className="text-[10px] text-stone-500">
+                      {t("gamification_support_rural")}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowGamificationModal(false)}
+                  className="w-7 h-7 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center font-bold text-xs cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Level Progress */}
+              <div className="mt-3 p-3 rounded-xl bg-gradient-to-r from-violet-900 to-purple-800 text-white shadow-xs">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-[9px] uppercase font-bold tracking-wider text-purple-200">
+                      {t("gamification_level")} {gamification.level}
+                    </span>
+                    <h4 className="text-base font-black text-amber-300">
+                      {getLocalizedLevelTitle(gamification.level, t)}
+                    </h4>
+                  </div>
+                  <span className="text-xl">✨</span>
+                </div>
+                <div className="mt-2">
+                  <div className="flex justify-between text-[10px] text-white/80 mb-1">
+                    <span>{gamification.xp} {t("gamification_xp")}</span>
+                    <span>{gamification.xpForNextLevel} {t("gamification_xp")} ({t("gamification_next_level")})</span>
+                  </div>
+                  <div className="w-full bg-white/20 rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className="bg-amber-400 h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${Math.min(100, Math.round((gamification.xp / gamification.xpForNextLevel) * 100))}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Discovery Quests */}
+              <div className="mt-3">
+                <h4 className="text-[10px] font-bold uppercase tracking-wider text-stone-500 mb-2">
+                  🎯 {t("gamification_quests")}
+                </h4>
+                <div className="space-y-2">
+                  {gamification.quests.map((q) => {
+                    const localizedQ = getLocalizedQuest(q, t);
+                    return (
+                      <div
+                        key={q.id}
+                        className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 ${
+                          q.completed
+                            ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                            : "bg-stone-50 border-stone-200 text-stone-800"
+                        }`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-bold truncate">{localizedQ.title}</span>
+                            {q.completed ? (
+                              <span className="text-[9px] bg-emerald-600 text-white font-bold px-1.5 py-0.5 rounded">
+                                ✓ {t("marketplace_done")}
+                              </span>
+                            ) : (
+                              <span className="text-[9px] bg-purple-100 text-purple-700 font-bold px-1.5 py-0.5 rounded">
+                                +{q.xpReward} {t("gamification_xp")}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-stone-500 mt-0.5 leading-snug">{localizedQ.description}</p>
+                        </div>
+                        <span className="text-[10px] font-extrabold text-stone-600 flex-shrink-0">
+                          {q.current} / {q.target}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Badges Grid */}
+              <div className="mt-3">
+                <h4 className="text-[10px] font-bold uppercase tracking-wider text-stone-500 mb-2">
+                  🎖️ {t("gamification_badges")}
+                </h4>
+                <div className="grid grid-cols-2 gap-2">
+                  {Object.values(BADGE_DEFINITIONS).map((badge) => {
+                    const isUnlocked = gamification.badges.includes(badge.id);
+                    const localizedBadge = getLocalizedBadge(badge.id, t);
+                    return (
+                      <div
+                        key={badge.id}
+                        className={`p-2 rounded-xl border transition ${
+                          isUnlocked
+                            ? "bg-amber-50/70 border-amber-300/80 shadow-xs"
+                            : "bg-stone-50/60 border-stone-200 opacity-55 grayscale"
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-lg">{badge.icon}</span>
+                          <span className="text-[11px] font-bold text-stone-900 leading-tight truncate">
+                            {localizedBadge.name}
+                          </span>
+                        </div>
+                        <p className="text-[9px] text-stone-500 mt-0.5 line-clamp-2 leading-tight">
+                          {localizedBadge.description}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="mt-4 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowGamificationModal(false);
+                    onEnterFair();
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-violet-700 hover:bg-violet-800 text-white font-bold text-xs transition cursor-pointer"
+                >
+                  {t("enter_fair_btn")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowGamificationModal(false)}
+                  className="px-4 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs transition cursor-pointer"
+                >
+                  {t("marketplace_close")}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CustomerSide({
+  inventory,
+  onOrderConfirmed,
+  onLogout,
+  onEnterFair,
+}: {
+  inventory: StoreItem[];
+  onOrderConfirmed: (order: ConfirmedOrder, cart: CartItem[]) => void;
+  onLogout: () => void;
+  onEnterFair?: () => void;
+}) {
+  return (
+    <OndcBuyerScreen
+      inventory={inventory}
+      onOrderConfirmed={onOrderConfirmed}
+      onLogout={onLogout}
+      onEnterFair={onEnterFair}
+    />
+  );
+}
+
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
     try {
@@ -156,7 +655,9 @@ export default function App() {
     }
   });
 
-  const [screen, setScreen] = useState<"onboarding" | "capture" | "preview" | "dashboard" | "buyer">(() => {
+  const [screen, setScreen] = useState<
+  "onboarding" | "capture" | "preview" | "dashboard" | "buyer" | "marketplace"
+>(() => {
     try {
       const loggedIn = localStorage.getItem("artisan_logged_in") === "true";
       const savedRole = localStorage.getItem("user_role");
@@ -166,6 +667,7 @@ export default function App() {
       return "onboarding";
     }
   });
+  const [showGame, setShowGame] = useState(false);
 
   // ── Inventory State (डी-डुप्लीकेशन के साथ ऑटो-क्लीन) ──
   const [inventory, setInventory] = useState<StoreItem[]>(() => {
@@ -420,10 +922,17 @@ export default function App() {
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setSelectedFile(file);
-      setImageSignature(`${file.name}_${file.size}_${file.lastModified}`);
-      setPhotoUrl(URL.createObjectURL(file));
-    }
+  setSelectedFile(file);
+  setImageSignature(`${file.name}_${file.size}_${file.lastModified}`);
+
+  const reader = new FileReader();
+
+  reader.onload = () => {
+    setPhotoUrl(reader.result as string);
+  };
+
+  reader.readAsDataURL(file);
+}
   };
 
   const fileToBase64 = (file: File): Promise<string> => {
@@ -1066,22 +1575,86 @@ Output ONLY valid JSON matching this schema:
   };
 
   // ── ROUTING ──
+  // 0. 3D Fair
+  if (showGame) {
+    return (
+      <GameWorld
+        onExit={() => setShowGame(false)}
+        inventory={inventory}
+        onAddToCart={(product: any) => {
+          try {
+            const saved = localStorage.getItem("kalakriti_cart");
+            const currentCart: CartItem[] = saved ? JSON.parse(saved) : [];
+            const matchedInv = inventory.find((i) => i.id === product.id) || {
+              id: product.id,
+              title_en: product.title,
+              title_hi: product.title,
+              title_local: product.title,
+              suggested_price: Number(product.price) || 499,
+              quantity: 5,
+              imageUrl: product.image_url,
+              artisan_name: product.artisan?.name || "Indian Artisan",
+              artisan_region: product.artisan?.location || "India",
+            };
+            const idx = currentCart.findIndex((c) => c.product.id === matchedInv.id);
+            if (idx >= 0) {
+              currentCart[idx].quantity += 1;
+            } else {
+              currentCart.push({ product: matchedInv, quantity: 1 });
+            }
+            localStorage.setItem("kalakriti_cart", JSON.stringify(currentCart));
+            window.dispatchEvent(new Event("storage"));
+          } catch (e) {
+            console.warn("3D Fair cart sync error:", e);
+          }
+        }}
+      />
+    );
+  }
   if (!isLoggedIn || screen === "onboarding") {
     return <OnboardingScreen initialRole={activeRole} onLogin={handleLoginSuccess} />;
   }
 
-  // 1. Buyer Marketplace View
+  // 1. Customer side — Unified Buyer Marketplace
   if (screen === "buyer") {
     return (
-      <OndcBuyerScreen
+      <CustomerSide
         inventory={inventory}
         onOrderConfirmed={handleOrderConfirmedFromBuyer}
         onLogout={handleBuyerLogout}
+        onEnterFair={() => setShowGame(true)}
       />
     );
   }
 
-  // 2. Listing Preview Screen
+  // 2. Marketplace — opens the existing 3D fair only after the user clicks Enter Craft Fair
+  if (screen === "marketplace") {
+    return (
+      <Marketplace
+        inventory={inventory}
+        onEnterFair={() => setShowGame(true)}
+        onBack={() => setScreen("buyer")}
+        onAddToCart={(item: StoreItem) => {
+          try {
+            const saved = localStorage.getItem("kalakriti_cart");
+            const currentCart: CartItem[] = saved ? JSON.parse(saved) : [];
+            const idx = currentCart.findIndex((c) => c.product.id === item.id);
+            if (idx >= 0) {
+              currentCart[idx].quantity += 1;
+            } else {
+              currentCart.push({ product: item, quantity: 1 });
+            }
+            localStorage.setItem("kalakriti_cart", JSON.stringify(currentCart));
+            window.dispatchEvent(new Event("storage"));
+          } catch (e) {
+            console.warn("Marketplace cart sync error:", e);
+          }
+        }}
+      />
+    );
+  }
+
+  // 3. Listing Preview
   if (screen === "preview" && selectedPreviewItem) {
     return (
       <CatalogPreview

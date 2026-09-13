@@ -3,6 +3,91 @@ import { Html } from "@react-three/drei";
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { supabase } from "../lib/supabase";
+import {
+  awardXp,
+  recordStallVisit,
+  recordCraftDiscovery,
+} from "../utils/gamificationService";
+
+export interface GameWorldProps {
+  onExit?: () => void;
+  inventory?: any[];
+  onAddToCart?: (product: any) => void;
+}
+
+export type DatabaseProduct = {
+  id: string;
+  title: string;
+  artisan_id: string;
+  description: string;
+  image_url: string;
+  category: string;
+  price: number | string;
+  stock: number;
+
+  artisan?: {
+    id: string;
+    name: string;
+    bio: string | null;
+    location: string | null;
+  } | null;
+};
+
+const mapInventoryToStallProducts = (inv: any[]): DatabaseProduct[] => {
+  if (!inv || inv.length === 0) return [];
+  const stallNames = [
+    "Meera Handloom",
+    "Rajasthan Pottery",
+    "Woodcraft",
+    "Banarasi Weaves",
+    "Blue Pottery",
+    "Indian Jewellery",
+  ];
+
+  return inv.map((item, index) => {
+    const title = item.title_en || item.title_hi || `Handmade Craft ${index + 1}`;
+    const desc =
+      item.story_en ||
+      item.quick_summary_en ||
+      item.story_hi ||
+      item.quick_summary_hi ||
+      "Authentic handcrafted creation from rural artisans across India.";
+    const price = item.suggested_price || 499;
+    const img = item.imageUrl || "";
+
+    let assignedStall = stallNames[index % stallNames.length];
+    const textLower = (title + " " + (item.categoryName || "")).toLowerCase();
+
+    if (/pottery|मिट्टी|clay|terracotta|घड़ा/i.test(textLower)) {
+      assignedStall = index % 2 === 0 ? "Rajasthan Pottery" : "Blue Pottery";
+    } else if (/wood|लकड़ी|कठपुतली|puppet|channapatna|toy/i.test(textLower)) {
+      assignedStall = "Woodcraft";
+    } else if (/silk|saree|banarasi|weav|बुनाई|shawl|dupatta/i.test(textLower)) {
+      assignedStall = index % 2 === 0 ? "Banarasi Weaves" : "Meera Handloom";
+    } else if (/jewel|silver|bangle|necklace|brass|पीतल|गहने/i.test(textLower)) {
+      assignedStall = "Indian Jewellery";
+    }
+
+    return {
+      id: item.id || `inv-${index}`,
+      title,
+      artisan_id: `artisan-${index}`,
+      description: desc,
+      image_url: img,
+      category: item.categoryName || "Handicraft",
+      price,
+      stock: item.quantity || 5,
+      artisan: {
+        id: `artisan-${index}`,
+        name: assignedStall,
+        bio: item.artisan_name
+          ? `${item.artisan_name} (${item.artisan_region || "India"})`
+          : "Master Indian Artisan",
+        location: item.artisan_region || "India",
+      },
+    };
+  });
+};
 
 /* =========================================================
    STALL DATA
@@ -802,28 +887,28 @@ function Player({
     const handleKeyDown = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
 
-      if (key === "w") {
+      if (key === "w" || key === "arrowup") {
         keys.current.w = true;
       }
 
-      if (key === "a") {
+      if (key === "a" || key === "arrowleft") {
         keys.current.a = true;
       }
 
-      if (key === "s") {
+      if (key === "s" || key === "arrowdown") {
         keys.current.s = true;
       }
 
-      if (key === "d") {
+      if (key === "d" || key === "arrowright") {
         keys.current.d = true;
       }
 
-      if (key === "e") {
+      if (key === "e" || key === "enter") {
         keys.current.e = true;
       }
 
       if (
-        ["w", "a", "s", "d", "e"].includes(key)
+        ["w", "a", "s", "d", "e", "arrowup", "arrowdown", "arrowleft", "arrowright", "enter"].includes(key)
       ) {
         event.preventDefault();
       }
@@ -832,23 +917,23 @@ function Player({
     const handleKeyUp = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
 
-      if (key === "w") {
+      if (key === "w" || key === "arrowup") {
         keys.current.w = false;
       }
 
-      if (key === "a") {
+      if (key === "a" || key === "arrowleft") {
         keys.current.a = false;
       }
 
-      if (key === "s") {
+      if (key === "s" || key === "arrowdown") {
         keys.current.s = false;
       }
 
-      if (key === "d") {
+      if (key === "d" || key === "arrowright") {
         keys.current.d = false;
       }
 
-      if (key === "e") {
+      if (key === "e" || key === "enter") {
         keys.current.e = false;
       }
     };
@@ -1462,24 +1547,6 @@ function Player({
    WORLD
 ========================================================= */
 
-type DatabaseProduct = {
-  id: string;
-  title: string;
-  artisan_id: string;
-  description: string;
-  image_url: string;
-  category: string;
-  price: number | string;
-  stock: number;
-
-  artisan?: {
-    id: string;
-    name: string;
-    bio: string | null;
-    location: string | null;
-  } | null;
-};
-
 function World({
   onEnterStall,
   dbProducts,
@@ -1634,8 +1701,10 @@ function ShopPanel({
 }) {
   const stallProducts = dbProducts.filter(
     (product) =>
-      product.artisan?.name === stallName
+      product.artisan?.name?.toLowerCase() === stallName.toLowerCase() ||
+      (product.category && stallName.toLowerCase().includes(product.category.toLowerCase()))
   );
+  const displayProducts = stallProducts.length > 0 ? stallProducts : dbProducts.slice(0, 4);
 
   return (
     <div
@@ -1731,7 +1800,7 @@ function ShopPanel({
 
         {/* PRODUCTS */}
 
-        {stallProducts.length > 0 ? (
+        {displayProducts.length > 0 ? (
           <div
             style={{
               display: "grid",
@@ -1740,7 +1809,7 @@ function ShopPanel({
               gap: "20px",
             }}
           >
-            {stallProducts.map((product) => (
+            {displayProducts.map((product) => (
               <div
                 key={product.id}
                 style={{
@@ -1834,9 +1903,10 @@ function ShopPanel({
                     </strong>
 
                     <button
-                      onClick={() =>
-                        onSelectProduct(product)
-                      }
+                      onClick={() => {
+                        recordCraftDiscovery(product.title || product.category);
+                        onSelectProduct(product);
+                      }}
                       style={{
                         background: "#3155a5",
                         color: "white",
@@ -1885,7 +1955,11 @@ function ShopPanel({
    MAIN GAME
 ========================================================= */
 
-export default function GameWorld() {
+export default function GameWorld({
+  onExit,
+  inventory = [],
+  onAddToCart,
+}: GameWorldProps) {
   const [enteredStall, setEnteredStall] =
     useState<string | null>(null);
 
@@ -1905,6 +1979,15 @@ export default function GameWorld() {
   const [loadingProducts, setLoadingProducts] =
     useState(true);
 
+  const mappedFallback = mapInventoryToStallProducts(inventory);
+  const effectiveProducts = dbProducts.length > 0 ? dbProducts : mappedFallback;
+
+  const handleEnterStall = (stallName: string) => {
+    setEnteredStall(stallName);
+    recordStallVisit(stallName);
+    recordCraftDiscovery(stallName);
+  };
+
   /* =====================================================
      ADD TO CART
   ===================================================== */
@@ -1916,6 +1999,12 @@ export default function GameWorld() {
       ...previousCart,
       product,
     ]);
+
+    if (onAddToCart) {
+      onAddToCart(product);
+    }
+
+    awardXp(50, `Added ${product.title} to cart`);
 
     setSelectedProduct(null);
   };
@@ -2055,6 +2144,220 @@ export default function GameWorld() {
       }}
     >
       {/* =================================================
+          EXIT CRAFT FAIR BUTTON
+      ================================================= */}
+
+      {onExit && (
+        <button
+          onClick={onExit}
+          style={{
+            position: "fixed",
+            top: "20px",
+            left: "20px",
+            zIndex: 150,
+            background: "rgba(255, 255, 255, 0.96)",
+            color: "#1c1917",
+            padding: "10px 20px",
+            borderRadius: "9999px",
+            fontWeight: "bold",
+            boxShadow: "0 6px 20px rgba(0,0,0,0.18)",
+            border: "1px solid rgba(0,0,0,0.1)",
+            cursor: "pointer",
+            fontSize: "14px",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            backdropFilter: "blur(8px)",
+          }}
+          aria-label="Exit Craft Fair"
+        >
+          <span style={{ fontSize: "16px" }}>←</span>
+          <span>Exit Craft Fair</span>
+        </button>
+      )}
+
+      {/* =================================================
+          EXPLORATION BANNER PILL
+      ================================================= */}
+
+      <div
+        style={{
+          position: "fixed",
+          top: "20px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 140,
+          background: "rgba(255, 255, 255, 0.92)",
+          padding: "8px 18px",
+          borderRadius: "9999px",
+          boxShadow: "0 4px 15px rgba(0,0,0,0.12)",
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          fontSize: "13px",
+          fontWeight: "600",
+          color: "#5b21b6",
+          backdropFilter: "blur(8px)",
+          border: "1px solid rgba(91, 33, 182, 0.15)",
+          pointerEvents: "none",
+        }}
+      >
+        <span>🎪</span>
+        <span>3D Virtual Craft Fair • Explore Stalls</span>
+      </div>
+
+      {/* =================================================
+          CONTROLS HINT HUD
+      ================================================= */}
+
+      <div
+        style={{
+          position: "fixed",
+          bottom: "20px",
+          left: "20px",
+          zIndex: 140,
+          background: "rgba(20, 20, 20, 0.78)",
+          color: "white",
+          padding: "10px 16px",
+          borderRadius: "14px",
+          fontSize: "12px",
+          backdropFilter: "blur(8px)",
+          pointerEvents: "none",
+          boxShadow: "0 4px 15px rgba(0,0,0,0.25)",
+          border: "1px solid rgba(255,255,255,0.1)",
+          lineHeight: "1.6",
+        }}
+      >
+        <div style={{ fontWeight: "bold", color: "#fbbf24", marginBottom: "2px" }}>
+          🎮 Controls
+        </div>
+        <div>
+          <span style={{ fontWeight: "700" }}>W A S D</span> or <span style={{ fontWeight: "700" }}>Arrow Keys</span> to walk
+        </div>
+        <div>
+          Approach stall & press <span style={{ fontWeight: "700" }}>E</span> / <span style={{ fontWeight: "700" }}>Enter</span> (or click stall)
+        </div>
+      </div>
+
+      {/* =================================================
+          VIRTUAL TOUCH D-PAD (Mobile Friendly)
+      ================================================= */}
+      <div
+        className="game-touch-controls"
+        style={{
+          position: "fixed",
+          bottom: "20px",
+          right: "20px",
+          zIndex: 140,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: "6px",
+          userSelect: "none",
+          touchAction: "manipulation",
+        }}
+      >
+        <button
+          type="button"
+          onPointerDown={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "w" }))}
+          onPointerUp={() => window.dispatchEvent(new KeyboardEvent("keyup", { key: "w" }))}
+          onPointerLeave={() => window.dispatchEvent(new KeyboardEvent("keyup", { key: "w" }))}
+          style={{
+            width: "46px",
+            height: "46px",
+            borderRadius: "14px",
+            background: "rgba(255, 255, 255, 0.92)",
+            color: "#1c1917",
+            fontWeight: "bold",
+            fontSize: "18px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+            border: "1px solid rgba(0,0,0,0.12)",
+            cursor: "pointer",
+          }}
+          aria-label="Move Forward"
+        >
+          ▲
+        </button>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button
+            type="button"
+            onPointerDown={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "a" }))}
+            onPointerUp={() => window.dispatchEvent(new KeyboardEvent("keyup", { key: "a" }))}
+            onPointerLeave={() => window.dispatchEvent(new KeyboardEvent("keyup", { key: "a" }))}
+            style={{
+              width: "46px",
+              height: "46px",
+              borderRadius: "14px",
+              background: "rgba(255, 255, 255, 0.92)",
+              color: "#1c1917",
+              fontWeight: "bold",
+              fontSize: "18px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+              border: "1px solid rgba(0,0,0,0.12)",
+              cursor: "pointer",
+            }}
+            aria-label="Move Left"
+          >
+            ◀
+          </button>
+          <button
+            type="button"
+            onPointerDown={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "s" }))}
+            onPointerUp={() => window.dispatchEvent(new KeyboardEvent("keyup", { key: "s" }))}
+            onPointerLeave={() => window.dispatchEvent(new KeyboardEvent("keyup", { key: "s" }))}
+            style={{
+              width: "46px",
+              height: "46px",
+              borderRadius: "14px",
+              background: "rgba(255, 255, 255, 0.92)",
+              color: "#1c1917",
+              fontWeight: "bold",
+              fontSize: "18px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+              border: "1px solid rgba(0,0,0,0.12)",
+              cursor: "pointer",
+            }}
+            aria-label="Move Backward"
+          >
+            ▼
+          </button>
+          <button
+            type="button"
+            onPointerDown={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "d" }))}
+            onPointerUp={() => window.dispatchEvent(new KeyboardEvent("keyup", { key: "d" }))}
+            onPointerLeave={() => window.dispatchEvent(new KeyboardEvent("keyup", { key: "d" }))}
+            style={{
+              width: "46px",
+              height: "46px",
+              borderRadius: "14px",
+              background: "rgba(255, 255, 255, 0.92)",
+              color: "#1c1917",
+              fontWeight: "bold",
+              fontSize: "18px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+              border: "1px solid rgba(0,0,0,0.12)",
+              cursor: "pointer",
+            }}
+            aria-label="Move Right"
+          >
+            ▶
+          </button>
+        </div>
+      </div>
+
+      {/* =================================================
           3D GAME
       ================================================= */}
 
@@ -2065,8 +2368,8 @@ export default function GameWorld() {
         }}
       >
         <World
-          onEnterStall={setEnteredStall}
-          dbProducts={dbProducts}
+          onEnterStall={handleEnterStall}
+          dbProducts={effectiveProducts}
         />
       </Canvas>
 
@@ -2083,7 +2386,7 @@ export default function GameWorld() {
           onSelectProduct={
             setSelectedProduct
           }
-          dbProducts={dbProducts}
+          dbProducts={effectiveProducts}
         />
       )}
 
@@ -2530,6 +2833,10 @@ export default function GameWorld() {
                   </div>
 
                   <button
+                    onClick={() => {
+                      setCartOpen(false);
+                      if (onExit) onExit();
+                    }}
                     style={{
                       width: "100%",
                       marginTop:
@@ -2546,9 +2853,11 @@ export default function GameWorld() {
                         "16px",
                       cursor:
                         "pointer",
+                      fontWeight:
+                        "bold",
                     }}
                   >
-                    Proceed to Checkout
+                    Proceed to Checkout →
                   </button>
                 </div>
               </>

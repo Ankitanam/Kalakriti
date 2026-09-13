@@ -65,7 +65,6 @@ export async function transcribeAudioPayload(
   // 1. Primary Path: Dedicated Gemini 3.5 Transcribe
   try {
     console.log("[VOICE API] attempting primary model (gemini-3.5-transcribe)...");
-    const transcribeUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-transcribe:generateContent?key=${geminiKey}`;
     const transcribeUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-transcribe:generateContent?key=${resolvedKey}`;
     
     // Google v1beta REST schema requires camelCase: inlineData and mimeType
@@ -120,7 +119,6 @@ export async function transcribeAudioPayload(
   if (!transcript) {
     try {
       console.log("[VOICE API] attempting fallback model (gemini-3.5-flash-lite)...");
-      const fallbackUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${geminiKey}`;
       const fallbackUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${resolvedKey}`;
       const langHint = languageCode ? `Spoken language hint: ${languageCode}.` : "";
       

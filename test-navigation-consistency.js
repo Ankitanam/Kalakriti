@@ -104,9 +104,11 @@ assertCheck(
 );
 
 assertCheck(
-  "ArtisanDashboard controls (Test Order & Logout) share unified h-8 rounded-full height",
-  dashboardSource.includes("h-8 px-2.5 rounded-full text-[11px] font-semibold text-amber-900") &&
-  dashboardSource.includes("h-8 px-2.5 rounded-full text-[11px] font-semibold text-white")
+  "ArtisanDashboard completely removed lightning test order button and retains clean logout button",
+  !dashboardSource.includes("Simulate PhonePe Buyer Order") &&
+  !dashboardSource.includes("handleSimulateBuyerOrder") &&
+  !dashboardSource.includes("⚡") &&
+  dashboardSource.includes("text-[11px] font-semibold text-white bg-red-900")
 );
 
 assertCheck(

@@ -509,22 +509,7 @@ app.post("/api/generate-catalog", async (req, res) => {
 // ═════════════════════════════════════════════════════════════
 // 4. MULTILINGUAL SPEECH-TO-TEXT TRANSCRIPTION ENDPOINT
 // ═════════════════════════════════════════════════════════════
-const CRAFT_VOCABULARY = [
-  "Kalakriti", "कलाकृति", "कलाकृती",
-  "ONDC", "ओएनडीसी",
-  "terracotta", "टेराकोटा",
-  "Madhubani", "मधुबनी",
-  "Warli", "वारली",
-  "Pattachitra", "पट्टचित्र",
-  "Chikankari", "चिकनकारी",
-  "Banarasi", "बनारसी",
-  "Dhokra", "ढोकरा",
-  "Kathputli", "कठपुतली", "कठपुतळी",
-  "handicraft", "हस्तशिल्प", "हस्तकला",
-  "pottery", "मातीकाम", "कुंभारकाम",
-  "diya", "दिवा", "दीपक",
-  "kalash", "कलश", "घडा",
-];
+
 
 app.post("/api/transcribe-audio", async (req, res) => {
   try {

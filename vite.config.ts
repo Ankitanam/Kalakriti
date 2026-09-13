@@ -1,4 +1,3 @@
-import { defineConfig, type HtmlTagDescriptor, type Plugin } from 'vite'
 import { defineConfig, loadEnv, type HtmlTagDescriptor, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -28,7 +27,6 @@ export default defineConfig(({ mode }) => {
         plugins: [
             react(),
             tailwindcss(),
-            kalakritiTranscriptionPlugin(),
             kalakritiTranscriptionPlugin(env),
             figmaSiteConfiguration(siteConfiguration),
             figmaErrorOverlayReplay(),
@@ -53,8 +51,7 @@ export default defineConfig(({ mode }) => {
     }
 })
 
-/** Connect middleware plugin handling /api/transcribe-audio in Vite dev server & preview */
-function kalakritiTranscriptionPlugin(): Plugin {
+/** Connect middleware plugin handling AI endpoints in Vite dev server & preview */
 function kalakritiTranscriptionPlugin(env: Record<string, string> = {}): Plugin {
     const handler = async (req: any, res: any) => {
         if (req.method !== 'POST') {
@@ -72,7 +69,6 @@ function kalakritiTranscriptionPlugin(env: Record<string, string> = {}): Plugin 
         req.on('end', async () => {
             try {
                 const parsed = JSON.parse(body || '{}');
-                const geminiKey = process.env.VITE_GEMINI_KEY || process.env.VITE_GEMINI_API_KEY;
                 const geminiKey = env.VITE_GEMINI_KEY || env.VITE_GEMINI_API_KEY || process.env.VITE_GEMINI_KEY || process.env.VITE_GEMINI_API_KEY;
 
                 const result = await transcribeAudioPayload({
@@ -130,7 +126,6 @@ function kalakritiTranscriptionPlugin(env: Record<string, string> = {}): Plugin 
     };
 
     return {
-        name: 'kalakriti-transcription-middleware',
         name: 'kalakriti-ai-middleware',
         configureServer(server) {
             server.middlewares.use('/api/transcribe-audio', handler);

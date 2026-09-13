@@ -18,17 +18,30 @@ import {
   getLocalizedCity,
 } from "./utils/artisanAiService";
 import { LanguageDropdown } from "./components/LanguageDropdown";
+import { TiltCard } from "./components/MouseParallax";
+import {
+  useBuyerGamification,
+  awardXp,
+  recordCraftDiscovery,
+  recordArtisanOrderSupport,
+  BADGE_DEFINITIONS,
+  getLocalizedLevelTitle,
+  getLocalizedBadge,
+  getLocalizedQuest,
+} from "./utils/gamificationService";
 
 interface OndcBuyerScreenProps {
   inventory: StoreItem[];
   onOrderConfirmed?: (order: any, cart: any) => void;
   onLogout: () => void;
+  onEnterFair?: () => void;
 }
 
 export default function OndcBuyerScreen({
   inventory,
   onOrderConfirmed,
   onLogout,
+  onEnterFair,
 }: OndcBuyerScreenProps) {
   const { t, currentLang, languages } = useLanguage();
   const activeLangMeta = languages?.find((l) => l.code === currentLang) || {
@@ -46,6 +59,9 @@ export default function OndcBuyerScreen({
   const [selectedProduct, setSelectedProduct] = useState<StoreItem | null>(null);
   const [selectedQty, setSelectedQty] = useState(1);
   const [buyerPlatform, setBuyerPlatform] = useState<"PhonePe Pincode" | "Paytm ONDC">("PhonePe Pincode");
+  const gamification = useBuyerGamification();
+  const [showDiscoveryModal, setShowDiscoveryModal] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // 🔍 फुल प्रोडक्ट विवरण स्क्रीन के लिए स्टेट
   const [viewingDetailsProduct, setViewingDetailsProduct] = useState<StoreItem | null>(null);
@@ -190,6 +206,7 @@ export default function OndcBuyerScreen({
     }
 
     updateCartAndStorage(updatedCart);
+    awardXp(50, "Added craft to cart");
     setSelectedProduct(null);
     setSelectedQty(1);
   };
@@ -283,13 +300,40 @@ export default function OndcBuyerScreen({
 
     // 5. स्टोरेज इवेंट ट्रिगर करें ताकि सेलर डैशबोर्ड तुरंत रीयल-टाइम अपडेट हो जाए
     window.dispatchEvent(new Event("storage"));
+    recordArtisanOrderSupport();
 
     // कार्ट खाली करें
     updateCartAndStorage([]);
     setCheckoutStage("success");
   };
 
+  const handleQuickAdd = (item: StoreItem, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const localized = getLocalizedProductContent(item, currentLang);
+    const stock = Math.max(0, Number(item.quantity ?? 0));
+    if (stock <= 0) return;
+
+    const existing = cart.find((c) => c.product.id === item.id);
+    const currentInCart = existing ? existing.quantity : 0;
+    if (currentInCart >= stock) return;
+
+    let updated: CartItem[];
+    if (existing) {
+      updated = cart.map((c) =>
+        c.product.id === item.id ? { ...c, quantity: c.quantity + 1 } : c
+      );
+    } else {
+      updated = [...cart, { product: item, quantity: 1 }];
+    }
+    updateCartAndStorage(updated);
+    awardXp(50, "Added craft from Marketplace");
+    recordCraftDiscovery(item.categoryName || item.title_en || item.title_hi);
+    setToastMessage(`✓ "${localized.title}" ${t("marketplace_added_toast")} (+50 XP)`);
+    setTimeout(() => setToastMessage(null), 2500);
+  };
+
   const openAddToCartModal = (item: StoreItem) => {
+    recordCraftDiscovery(item.categoryName || item.title_en || item.title_hi);
     const { availableToAdd } = getProductStockInfo(item.id);
     setSelectedProduct(item);
     setSelectedQty(availableToAdd > 0 ? 1 : 0);
@@ -314,96 +358,119 @@ export default function OndcBuyerScreen({
         }}
       >
         {/* Status Bar */}
-        <div className="flex items-center justify-between px-6 pt-3 pb-1 text-slate-800 text-xs font-semibold">
+        <div className="flex items-center justify-between px-6 pt-3 pb-1 text-white bg-[#5B21B6] text-xs font-semibold select-none flex-shrink-0">
           <span>9:41</span>
           <div className="flex items-center gap-1.5">
             <span className="text-[10px]">5G</span>
-            <div className="w-5 h-2.5 border border-slate-700 rounded-xs p-0.5">
-              <div className="h-full bg-slate-800 w-3/4 rounded-2xs" />
+            <div className="w-5 h-2.5 border border-white/80 rounded-xs p-0.5">
+              <div className="h-full bg-white w-3/4 rounded-2xs" />
             </div>
           </div>
         </div>
 
-        {/* ── Buyer App Header ── */}
-        <div
-          className="p-4 text-white shadow-md flex-shrink-0"
-          style={{
-            background:
-              buyerPlatform === "PhonePe Pincode"
-                ? "linear-gradient(135deg, #5f259f 0%, #3b1466 100%)"
-                : "linear-gradient(135deg, #00b9f5 0%, #002970 100%)",
-          }}
-        >
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={onLogout}
-                className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 border border-white/25 flex items-center justify-center text-white active:scale-95 transition cursor-pointer flex-shrink-0"
-                title={t("logout")}
-                aria-label={t("logout")}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-              <div>
-                <p className="text-[10px] uppercase font-bold tracking-widest text-white/80 flex items-center gap-1">
-                  <span>{buyerPlatform}</span>
-                  <span className="text-[8px] bg-white/25 px-1.5 py-0.2 rounded font-normal uppercase">Sandbox</span>
-                </p>
-                <p className="text-xs font-semibold flex items-center gap-1">
-                  <span>📍 {address.city || "बांद्रा वेस्ट, मुंबई"}</span>
-                  <span className="text-[10px]">▾</span>
-                </p>
+        {/* ── HEADER (2 Rows, Non-Colliding Responsive Architecture) ── */}
+        <header className="bg-[#5B21B6] px-3.5 py-2 text-white shadow-md flex-shrink-0">
+          {/* Row 1: Back + Brand + Language Dropdown */}
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={onLogout}
+              className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 border border-white/25 flex items-center justify-center text-white active:scale-95 transition cursor-pointer flex-shrink-0"
+              title={t("marketplace_back_customer")}
+              aria-label={t("marketplace_back_customer")}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-base">🛍️</span>
+              <div className="min-w-0">
+                <p className="text-[8px] uppercase tracking-wider text-white/70 leading-none">Kalakriti</p>
+                <h1 className="text-xs font-black leading-tight truncate">Marketplace</h1>
               </div>
             </div>
 
-            {/* Language Switcher & Cart Icon */}
-            <div className="flex items-center gap-1.5">
-              {/* 🌐 Language Switcher */}
+            <div className="flex-shrink-0">
               <LanguageDropdown theme="buyer" />
-
-              <button
-                type="button"
-                onClick={() => setCheckoutStage("cart")}
-                className="relative w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 border border-white/25 flex items-center justify-center text-white active:scale-95 transition cursor-pointer flex-shrink-0"
-                title={t("your_cart_title").replace(" ({count} सामान)", "")}
-              >
-                <span>🛒 </span>
-                {totalCartCount > 0 && (
-                  <span
-                    key={totalCartCount}
-                    className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center animate-badge-bump"
-                  >
-                    {totalCartCount}
-                  </span>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setBuyerPlatform((prev) =>
-                    prev === "PhonePe Pincode" ? "Paytm ONDC" : "PhonePe Pincode"
-                  )
-                }
-                className="text-[10px] font-bold bg-white/20 px-2 py-1.5 rounded-lg border border-white/30 touch-press cursor-pointer"
-              >
-                {t("switch_role")}
-              </button>
             </div>
           </div>
 
+          {/* Row 2: Level & XP Pill + Quests Trigger */}
+          <div className="mt-1.5 pt-1.5 border-t border-white/15 flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setShowDiscoveryModal(true)}
+              className="flex items-center gap-1 bg-amber-400/25 hover:bg-amber-400/35 text-amber-200 border border-amber-300/40 px-2.5 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition active:scale-95 shadow-xs"
+              title="View Explorer Quests & Badges"
+            >
+              <span>✨</span>
+              <span className="text-white font-extrabold">{t("gamification_level")} {gamification.level}</span>
+              <span className="opacity-90">({gamification.xp} {t("gamification_xp")})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowDiscoveryModal(true)}
+              className="flex items-center gap-1 text-[10px] font-semibold text-white/90 hover:text-white bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded-full transition cursor-pointer active:scale-95"
+            >
+              <span>🏆</span>
+              <span>{t("marketplace_craft_explorer_quests")} ({gamification.badges.length})</span>
+            </button>
+          </div>
+        </header>
+
+        {/* ── Toast Alert ── */}
+        {toastMessage && (
+          <div className="absolute top-20 left-3 right-3 z-40 bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-xl flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-200">
+            <span>🎉</span>
+            <span className="truncate">{toastMessage}</span>
+          </div>
+        )}
+
+        {/* ── MAIN SCROLLABLE CONTENT ── */}
+        <main
+          className="flex-1 overflow-y-auto px-3.5 py-3 space-y-3"
+          style={{ scrollbarWidth: "none", paddingBottom: totalCartCount > 0 ? 140 : 80 }}
+        >
+          {/* Hero Banner */}
+          <section className="overflow-hidden rounded-2xl bg-gradient-to-r from-violet-900 to-purple-700 p-3.5 text-white shadow-md relative">
+            <div className="relative z-10">
+              <p className="text-[9px] font-bold uppercase tracking-widest text-amber-300">
+                {t("marketplace_ondc_ready")} • Indian Crafts
+              </p>
+              <h2 className="mt-1 text-sm font-black leading-tight">
+                {t("marketplace_hero_subtitle")}
+              </h2>
+              <p className="mt-1 text-white/85 text-[11px] leading-relaxed">
+                {t("marketplace_hero_desc")}
+              </p>
+              <div className="mt-2.5 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onEnterFair) onEnterFair();
+                  }}
+                  className="rounded-xl bg-white px-3 py-1.5 font-bold text-violet-900 shadow-md hover:bg-amber-50 active:scale-95 transition flex items-center gap-1.5 cursor-pointer text-xs"
+                >
+                  <span>🎪</span>
+                  <span>{t("enter_fair_btn")}</span>
+                </button>
+              </div>
+            </div>
+          </section>
+
           {/* Search Bar */}
-          <div className="relative mt-2">
+          <div className="relative">
             <input
               type="text"
               placeholder={t("search_placeholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full py-2.5 pl-9 pr-8 rounded-xl bg-white text-slate-800 text-xs outline-none shadow-inner font-medium"
+              className="w-full py-2.5 pl-9 pr-8 rounded-xl bg-white text-slate-800 text-xs outline-none shadow-xs border border-stone-200 font-medium"
             />
-            <span className="absolute left-3 top-2.5 text-slate-400 text-xs">🔍 </span>
+            <span className="absolute left-3 top-2.5 text-slate-400 text-xs">🔍</span>
             {searchQuery && (
               <button
                 type="button"
@@ -414,122 +481,124 @@ export default function OndcBuyerScreen({
               </button>
             )}
           </div>
-        </div>
 
-        {/* ── ONDC Live Broadcast Bar ── */}
-        <div className="bg-purple-100 border-b border-purple-200 px-4 py-1.5 flex items-center justify-between text-[11px] text-purple-900 font-semibold">
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            {t("ondc_open_feed")}
-          </span>
-          <span className="text-[10px] text-purple-700 font-mono">Beckn v1.1 • nic2004:52110</span>
-        </div>
-
-        {/* ── Product Feed (Real-Time Stock Checked) ── */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3" style={{ scrollbarWidth: "none", paddingBottom: 110 }}>
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-              {t("direct_from_artisans")}
-            </h3>
-            <span className="text-[11px] text-slate-500">{filteredProducts.length} {t("available")}</span>
+          {/* ── ONDC Live Broadcast Bar ── */}
+          <div className="bg-purple-100/80 border border-purple-200/80 rounded-xl px-3 py-1.5 flex items-center justify-between text-[10px] text-purple-900 font-semibold">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>{t("ondc_open_feed")}</span>
+            </span>
+            <span className="font-mono text-[9px] text-purple-700">Beckn v1.1 • nic2004:52110</span>
           </div>
 
+          {/* Section Header */}
+          <div className="flex items-center justify-between px-0.5">
+            <div>
+              <p className="text-[9px] font-bold uppercase tracking-widest text-violet-700">
+                {t("marketplace_ondc_ready")}
+              </p>
+              <h3 className="text-sm font-black text-stone-900 leading-tight">
+                {t("marketplace_featured_crafts")}
+              </h3>
+            </div>
+            <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-stone-700 shadow-xs border border-stone-200">
+              {filteredProducts.length} {t("marketplace_products_count")}
+            </span>
+          </div>
+
+          {/* Product Grid (2 columns on mobile, touch-friendly, localized with TiltCard) */}
           {filteredProducts.length === 0 ? (
-            <div className="text-center py-16 text-slate-400">
-              <p className="text-3xl mb-2">🔍 </p>
-              <p className="text-sm font-semibold">{t("no_items_found_query").replace("{query}", searchQuery)}</p>
-              <p className="text-xs mt-1">{t("search_suggestion_hint")}</p>
+            <div className="text-center py-12 text-slate-400">
+              <p className="text-3xl mb-2">🔍</p>
+              <p className="text-xs font-semibold">{t("no_items_found_query").replace("{query}", searchQuery)}</p>
+              <p className="text-[10px] mt-1">{t("search_suggestion_hint")}</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2.5">
               {filteredProducts.map((item, idx) => {
+                const localized = getLocalizedProductContent(item, currentLang);
                 const stock = Math.max(0, Number(item.quantity ?? 0));
-                const inCart = cart.find((c) => c.product.id === item.id)?.quantity || 0;
                 const isOutOfStock = stock <= 0;
 
                 return (
-                  <div
+                  <TiltCard
                     key={item.id}
-                    className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-xs flex flex-col justify-between hover:shadow-md transition animate-card-enter"
-                    style={{ animationDelay: `${Math.min(idx * 45, 300)}ms` }}
+                    maxTilt={8}
+                    scale={1.01}
+                    className="cursor-pointer overflow-hidden rounded-xl bg-white shadow-xs border border-stone-200 hover:shadow-md transition-all duration-200 flex flex-col justify-between animate-card-enter"
+                    style={{ animationDelay: `${Math.min(idx * 40, 280)}ms` }}
+                    onClick={() => {
+                      setViewingDetailsProduct(item);
+                      recordCraftDiscovery(item.categoryName || item.title_en || item.title_hi);
+                    }}
                   >
-                    {/* फोटो पर क्लिक करने से फुल डिस्क्रिप्शन खुलेगा */}
-                    <div
-                      className="relative h-36 bg-slate-100 cursor-pointer group overflow-hidden"
-                      onClick={() => setViewingDetailsProduct(item)}
-                    >
-                      <img
-                        src={item.imageUrl}
-                        alt={item.title_en}
-                        className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${
-                          isOutOfStock ? "grayscale opacity-75" : ""
-                        }`}
-                      />
-                      <span className="absolute bottom-1.5 left-1.5 bg-black/60 text-white text-[8px] font-bold px-1.5 py-0.5 rounded">
-                        {item.artisan_region || t("craft_region_default")}
+                    <div className="aspect-square bg-stone-100 overflow-hidden relative group">
+                      {item.imageUrl ? (
+                        <img
+                          src={item.imageUrl}
+                          alt={localized.title}
+                          className={`h-full w-full object-cover transition-transform duration-300 group-hover:scale-105 ${
+                            isOutOfStock ? "grayscale opacity-75" : ""
+                          }`}
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-3xl">🎨</div>
+                      )}
+                      <span className="absolute top-1.5 right-1.5 rounded-full bg-black/60 backdrop-blur-xs px-1.5 py-0.5 text-[8px] font-bold text-white uppercase tracking-wider">
+                        {t("marketplace_handmade_tag")}
                       </span>
-                      <span
-                        className={`absolute top-1.5 left-1.5 text-[8px] font-bold px-1.5 py-0.5 rounded shadow-xs ${
-                          isOutOfStock
-                            ? "bg-red-600 text-white"
-                            : "bg-white/90 text-purple-900"
-                        }`}
-                      >
-                        {isOutOfStock ? t("out_of_stock") : `${t("stock_count")}: ${stock}`}
+                      <span className="absolute bottom-1.5 left-1.5 rounded-full bg-black/60 backdrop-blur-xs px-1.5 py-0.5 text-[8px] font-medium text-white truncate max-w-[80%]">
+                        📍 {item.artisan_region || "India"}
                       </span>
+                      {isOutOfStock && (
+                        <span className="absolute top-1.5 left-1.5 rounded-full bg-red-600 px-1.5 py-0.5 text-[8px] font-bold text-white uppercase tracking-wider shadow-xs">
+                          {t("out_of_stock")}
+                        </span>
+                      )}
                     </div>
 
-                    {/* नाम व दाम */}
-                    <div
-                      className="p-2.5 flex-1 flex flex-col justify-between cursor-pointer"
-                      onClick={() => setViewingDetailsProduct(item)}
-                    >
+                    <div className="p-2 flex-1 flex flex-col justify-between">
                       <div>
-                        <h4 className="text-xs font-bold text-slate-900 line-clamp-1">{getDisplayTitle(item)}</h4>
-                        <p className="text-[10px] text-slate-500 line-clamp-1 mt-0.5">
+                        <h4 className="line-clamp-2 font-bold text-stone-900 text-xs leading-snug">
+                          {localized.title}
+                        </h4>
+                        <p className="mt-0.5 text-[9px] text-stone-500 line-clamp-1">
                           {currentLang === "en" ? (item.title_local || item.title_hi) : item.title_en}
                         </p>
-                        <div className="flex items-baseline gap-1 mt-1">
-                          <span className="text-xs font-extrabold text-slate-900">₹{item.suggested_price}</span>
-                          <span className="text-[9px] text-emerald-700 bg-emerald-50 px-1 rounded font-bold">
-                            {t("savings_badge")}
-                          </span>
-                        </div>
                       </div>
-
-                      {/* कार्ट में जोड़ें बटन */}
-                      <div className="mt-2 pt-1.5 border-t border-slate-100">
+                      <div className="mt-2 flex items-center justify-between pt-1.5 border-t border-stone-100">
+                        <div>
+                          <span className="text-xs font-black text-stone-900">₹{item.suggested_price}</span>
+                          <p className="text-[8px] font-semibold text-emerald-700">
+                            {isOutOfStock ? t("out_of_stock") : `${t("marketplace_in_stock")} (${stock})`}
+                          </p>
+                        </div>
                         <button
                           type="button"
                           disabled={isOutOfStock}
                           onClick={(e) => {
                             e.stopPropagation();
-                            openAddToCartModal(item);
+                            if (isOutOfStock) return;
+                            handleQuickAdd(item, e);
                           }}
-                          className={`w-full py-2 rounded-xl text-xs font-bold text-white shadow-xs touch-press transition-all flex items-center justify-center gap-1.5 ${
+                          className={`rounded-lg px-2 py-1 text-[10px] font-bold shadow-xs transition active:scale-95 ${
                             isOutOfStock
-                              ? "bg-slate-400 cursor-not-allowed"
-                              : "cursor-pointer"
+                              ? "bg-stone-300 text-stone-500 cursor-not-allowed"
+                              : "bg-violet-700 hover:bg-violet-800 text-white cursor-pointer"
                           }`}
-                          style={{
-                            background: isOutOfStock
-                              ? "#94a3b8"
-                              : buyerPlatform === "PhonePe Pincode"
-                              ? "#5f259f"
-                              : "#00b9f5",
-                          }}
+                          title={t("marketplace_add_cart")}
                         >
-                          <span>🛒 </span>
-                          <span>{isOutOfStock ? t("out_of_stock") : t("add_to_cart")}</span>
+                          {t("marketplace_add_cart")}
                         </button>
                       </div>
                     </div>
-                  </div>
+                  </TiltCard>
                 );
               })}
             </div>
           )}
-        </div>
+        </main>
 
         {/* ── Floating Bottom Cart Bar ── */}
         {totalCartCount > 0 && checkoutStage === "closed" && (
@@ -1236,6 +1305,161 @@ export default function OndcBuyerScreen({
               >
                 {t("continue_shopping")}
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Artisan Discovery & Quests Modal (In-Shell) ── */}
+        {showDiscoveryModal && (
+          <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3">
+            <div className="bg-white rounded-2xl max-w-sm w-full p-4 max-h-[85vh] overflow-y-auto shadow-2xl border border-stone-200 animate-in fade-in zoom-in-95 duration-200">
+              <div className="flex items-center justify-between pb-3 border-b border-stone-100">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xl">🏆</span>
+                  <div>
+                    <h3 className="font-black text-stone-900 text-sm">
+                      {t("gamification_quests")}
+                    </h3>
+                    <p className="text-[10px] text-stone-500">
+                      {t("gamification_support_rural")}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowDiscoveryModal(false)}
+                  className="w-7 h-7 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center font-bold text-xs cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Level Progress */}
+              <div className="mt-3 p-3 rounded-xl bg-gradient-to-r from-violet-900 to-purple-800 text-white shadow-xs">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-[9px] uppercase font-bold tracking-wider text-purple-200">
+                      {t("gamification_level")} {gamification.level}
+                    </span>
+                    <h4 className="text-base font-black text-amber-300">
+                      {getLocalizedLevelTitle(gamification.level, t)}
+                    </h4>
+                  </div>
+                  <span className="text-xl">✨</span>
+                </div>
+                <div className="mt-2">
+                  <div className="flex justify-between text-[10px] text-white/80 mb-1">
+                    <span>{gamification.xp} {t("gamification_xp")}</span>
+                    <span>{gamification.xpForNextLevel} {t("gamification_xp")} ({t("gamification_next_level")})</span>
+                  </div>
+                  <div className="w-full bg-white/20 rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className="bg-amber-400 h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${Math.min(100, Math.round((gamification.xp / gamification.xpForNextLevel) * 100))}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Discovery Quests */}
+              <div className="mt-3">
+                <h4 className="text-[10px] font-bold uppercase tracking-wider text-stone-500 mb-2">
+                  🎯 {t("gamification_quests")}
+                </h4>
+                <div className="space-y-2">
+                  {gamification.quests.map((q) => {
+                    const localizedQ = getLocalizedQuest(q, t);
+                    return (
+                      <div
+                        key={q.id}
+                        className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 ${
+                          q.completed
+                            ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                            : "bg-stone-50 border-stone-200 text-stone-800"
+                        }`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-bold truncate">{localizedQ.title}</span>
+                            {q.completed ? (
+                              <span className="text-[9px] bg-emerald-600 text-white font-bold px-1.5 py-0.5 rounded">
+                                ✓ {t("marketplace_done")}
+                              </span>
+                            ) : (
+                              <span className="text-[9px] bg-purple-100 text-purple-700 font-bold px-1.5 py-0.5 rounded">
+                                +{q.xpReward} {t("gamification_xp")}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-stone-500 mt-0.5 leading-snug">{localizedQ.description}</p>
+                        </div>
+                        <span className="text-[10px] font-extrabold text-stone-600 flex-shrink-0">
+                          {q.current} / {q.target}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Badges Grid */}
+              <div className="mt-3">
+                <h4 className="text-[10px] font-bold uppercase tracking-wider text-stone-500 mb-2">
+                  🎖️ {t("gamification_badges")}
+                </h4>
+                <div className="grid grid-cols-2 gap-2">
+                  {Object.values(BADGE_DEFINITIONS).map((badge) => {
+                    const isUnlocked = gamification.badges.includes(badge.id);
+                    const localizedBadge = getLocalizedBadge(badge.id, t);
+                    return (
+                      <div
+                        key={badge.id}
+                        className={`p-2 rounded-xl border transition ${
+                          isUnlocked
+                            ? "bg-amber-50/70 border-amber-300/80 shadow-xs"
+                            : "bg-stone-50/60 border-stone-200 opacity-55 grayscale"
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-lg">{badge.icon}</span>
+                          <span className="text-[11px] font-bold text-stone-900 leading-tight truncate">
+                            {localizedBadge.name}
+                          </span>
+                        </div>
+                        <p className="text-[9px] text-stone-500 mt-0.5 line-clamp-2 leading-tight">
+                          {localizedBadge.description}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="mt-4 flex items-center gap-2">
+                {onEnterFair && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowDiscoveryModal(false);
+                      onEnterFair();
+                    }}
+                    className="flex-1 py-2.5 rounded-xl bg-violet-700 hover:bg-violet-800 text-white font-bold text-xs transition cursor-pointer"
+                  >
+                    {t("enter_fair_btn")}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowDiscoveryModal(false)}
+                  className={`py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs transition cursor-pointer ${
+                    onEnterFair ? "px-4" : "w-full"
+                  }`}
+                >
+                  {t("marketplace_close")}
+                </button>
+              </div>
             </div>
           </div>
         )}
