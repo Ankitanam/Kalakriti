@@ -1,15 +1,21 @@
 import { defineConfig, type HtmlTagDescriptor, type Plugin } from 'vite'
+import { defineConfig, loadEnv, type HtmlTagDescriptor, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import siteConfiguration from './.figma/make/site.json'
+import { transcribeAudioPayload } from './src/utils/transcribeService.ts'
+import { enhanceImagePayload } from './src/utils/imageService.ts'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // Vite config — https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
+    // Load .env variables so Vite dev server plugins have access to server environment configuration
+    const env = loadEnv(mode, process.cwd(), '')
+
     // .figma/make/deploy-preview passes `--mode development` for cached-preview builds.
     const emitSourcemaps = mode === 'development'
 
@@ -22,6 +28,8 @@ export default defineConfig(({ mode }) => {
         plugins: [
             react(),
             tailwindcss(),
+            kalakritiTranscriptionPlugin(),
+            kalakritiTranscriptionPlugin(env),
             figmaSiteConfiguration(siteConfiguration),
             figmaErrorOverlayReplay(),
             figmaReactRefreshBoundaryFallback(),
@@ -44,6 +52,96 @@ export default defineConfig(({ mode }) => {
         },
     }
 })
+
+/** Connect middleware plugin handling /api/transcribe-audio in Vite dev server & preview */
+function kalakritiTranscriptionPlugin(): Plugin {
+function kalakritiTranscriptionPlugin(env: Record<string, string> = {}): Plugin {
+    const handler = async (req: any, res: any) => {
+        if (req.method !== 'POST') {
+            res.statusCode = 405;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ success: false, error: 'Method Not Allowed' }));
+            return;
+        }
+
+        let body = '';
+        req.on('data', (chunk: any) => {
+            body += chunk;
+        });
+
+        req.on('end', async () => {
+            try {
+                const parsed = JSON.parse(body || '{}');
+                const geminiKey = process.env.VITE_GEMINI_KEY || process.env.VITE_GEMINI_API_KEY;
+                const geminiKey = env.VITE_GEMINI_KEY || env.VITE_GEMINI_API_KEY || process.env.VITE_GEMINI_KEY || process.env.VITE_GEMINI_API_KEY;
+
+                const result = await transcribeAudioPayload({
+                    audioBase64: parsed.audioBase64,
+                    mimeType: parsed.mimeType,
+                    languageCode: parsed.languageCode,
+                    geminiKey,
+                });
+
+                res.statusCode = result.success ? 200 : 500;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify(result));
+            } catch (err: any) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: false, error: err.message || 'Internal Server Error' }));
+            }
+        });
+    };
+
+    const imageHandler = async (req: any, res: any) => {
+        if (req.method !== 'POST') {
+            res.statusCode = 405;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ success: false, error: 'Method Not Allowed' }));
+            return;
+        }
+
+        let body = '';
+        req.on('data', (chunk: any) => {
+            body += chunk;
+        });
+
+        req.on('end', async () => {
+            try {
+                const parsed = JSON.parse(body || '{}');
+                const geminiKey = env.VITE_GEMINI_KEY || env.VITE_GEMINI_API_KEY || process.env.VITE_GEMINI_KEY || process.env.VITE_GEMINI_API_KEY;
+
+                const result = await enhanceImagePayload({
+                    imageBase64: parsed.imageBase64,
+                    mimeType: parsed.mimeType,
+                    imageUrl: parsed.imageUrl,
+                    geminiKey,
+                });
+
+                res.statusCode = result.success ? 200 : 500;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify(result));
+            } catch (err: any) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: false, error: err.message || 'Internal Server Error' }));
+            }
+        });
+    };
+
+    return {
+        name: 'kalakriti-transcription-middleware',
+        name: 'kalakriti-ai-middleware',
+        configureServer(server) {
+            server.middlewares.use('/api/transcribe-audio', handler);
+            server.middlewares.use('/api/enhance-image', imageHandler);
+        },
+        configurePreviewServer(server) {
+            server.middlewares.use('/api/transcribe-audio', handler);
+            server.middlewares.use('/api/enhance-image', imageHandler);
+        },
+    };
+}
 
 type FigmaSiteConfiguration = {
     title?: string

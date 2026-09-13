@@ -10,6 +10,7 @@ import { LanguageDropdown } from "./components/LanguageDropdown";
 import { CartItem, ConfirmedOrder } from "./utils/becknEngine";
 import { areItemsDuplicate, extractCoreKeyword, getDisplayTitle, KNOWN_CRAFT_LOCALIZATIONS, LocalizedContentMap } from "./utils/artisanAiService";
 import { MicPulseRing, AiScannerOverlay } from "./components/motion/MotionPrimitives";
+import { uploadToCloudinaryWithBgRemoval, getCloudinaryTransparentUrl } from "./utils/imageService";
 
 // Craft Categories
 const CATEGORIES: Array<{ hi: string; en: string; key: TranslationKey }> = [
@@ -217,6 +218,19 @@ export default function App() {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
+  // Release active microphone streams if component unmounts
+  useEffect(() => {
+    return () => {
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+        mediaStreamRef.current = null;
+      }
+    };
+  }, []);
 
   const [isRecording, setIsRecording] = useState(false);
   const [micState, setMicState] = useState<"idle" | "listening" | "processing" | "success" | "error">("idle");
@@ -426,68 +440,223 @@ export default function App() {
     const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
     if (!cloudName || !uploadPreset) {
-      return { originalUrl: photoUrl || "", enhancedUrl: photoUrl || "" };
+      return {
+        originalUrl: photoUrl || "",
+        transparentUrl: photoUrl || "",
+        enhancedUrl: photoUrl || "",
+      };
     }
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("upload_preset", uploadPreset);
-
-      const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-        method: "POST",
-        body: formData,
+      const result = await uploadToCloudinaryWithBgRemoval(file, {
+        cloudName,
+        uploadPreset,
       });
 
-      if (!res.ok) return { originalUrl: photoUrl || "", enhancedUrl: photoUrl || "" };
-      const data = await res.json();
-      const enhancedUrl = `https://res.cloudinary.com/${cloudName}/image/upload/e_improve,q_auto,f_auto/${data.public_id}.${data.format || "jpg"}`;
-      return { originalUrl: data.secure_url, enhancedUrl };
+      if (!result.success) {
+        return {
+          originalUrl: photoUrl || "",
+          transparentUrl: photoUrl || "",
+          enhancedUrl: photoUrl || "",
+        };
+      }
+
+      return {
+        originalUrl: result.originalUrl,
+        transparentUrl: result.transparentUrl,
+        enhancedUrl: result.transparentUrl,
+        publicId: result.publicId,
+      };
     } catch {
-      return { originalUrl: photoUrl || "", enhancedUrl: photoUrl || "" };
+      return {
+        originalUrl: photoUrl || "",
+        transparentUrl: photoUrl || "",
+        enhancedUrl: photoUrl || "",
+      };
     }
   };
 
-  const handleMicToggle = () => {
-    if (isRecording) {
-      setIsRecording(false);
-      setMicState("idle");
-    } else {
-      setVoiceText("");
-      setIsRecording(true);
-      setMicState("listening");
-      const SpeechRecognition =
-        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        const recognition = new SpeechRecognition();
-        recognition.lang = speechLang;
-        recognition.interimResults = true;
-        recognition.onresult = (event: any) => {
-          setMicState("processing");
-          const transcript = Array.from(event.results)
-            .map((r: any) => r[0].transcript)
-            .join("");
-          setVoiceText(transcript);
-        };
-        recognition.onend = () => {
+  const startAudioRecording = async () => {
+    console.log("[VOICE] startAudioRecording requested");
+    try {
+      // A11: Prevent multiple active streams - terminate any old stream before opening new one
+      if (mediaStreamRef.current) {
+        console.log("[VOICE] cleaning up prior active stream before opening new one");
+        mediaStreamRef.current.getTracks().forEach((track) => {
+          track.stop();
+          console.log(`[VOICE] prior track stopped: ${track.label}, readyState: ${track.readyState}`);
+        });
+        mediaStreamRef.current = null;
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        try { mediaRecorderRef.current.stop(); } catch (e) {}
+        mediaRecorderRef.current = null;
+      }
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.error("[VOICE] getUserMedia not supported on this device/browser");
+        alert(t("voice_permission_denied"));
+        setMicState("error");
+        setTimeout(() => setMicState("idle"), 1500);
+        return;
+      }
+
+      console.log("[VOICE] requesting microphone permission...");
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      console.log(`[VOICE] permission granted, active tracks: ${stream.getTracks().length}`);
+
+      // Determine best supported container MIME type
+      let mimeType = "audio/webm";
+      if (typeof MediaRecorder !== "undefined") {
+        if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+          mimeType = "audio/webm;codecs=opus";
+        } else if (MediaRecorder.isTypeSupported("audio/webm")) {
+          mimeType = "audio/webm";
+        } else if (MediaRecorder.isTypeSupported("audio/mp4")) {
+          mimeType = "audio/mp4";
+        } else if (MediaRecorder.isTypeSupported("audio/ogg;codecs=opus")) {
+          mimeType = "audio/ogg;codecs=opus";
+        }
+      }
+      console.log(`[VOICE] negotiated recording MIME type: ${mimeType}`);
+
+      audioChunksRef.current = [];
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event: BlobEvent) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+          console.log(`[VOICE] dataavailable chunk received: ${event.data.size} bytes, total chunks: ${audioChunksRef.current.length}`);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        console.log("[VOICE] mediaRecorder onstop fired");
+
+        // Combine all chunks collected into final Blob
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        console.log(`[VOICE] final audio blob created, chunks count: ${audioChunksRef.current.length}, blob size: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
+
+        // A10: Guaranteed hardware release - stop ALL tracks on the stream directly
+        stream.getTracks().forEach((track) => {
+          track.stop();
+          console.log(`[VOICE] track ${track.label} stopped, readyState: ${track.readyState}`);
+        });
+        if (mediaStreamRef.current) {
+          mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+          mediaStreamRef.current = null;
+        }
+
+        if (audioBlob.size === 0) {
+          console.warn("[VOICE] recorded audio blob is empty (0 bytes)");
+          setMicState("idle");
           setIsRecording(false);
-          setMicState("success");
-          setTimeout(() => setMicState("idle"), 1200);
-        };
-        recognition.onerror = () => {
-          setIsRecording(false);
+          return;
+        }
+
+        try {
+          const reader = new FileReader();
+          reader.readAsDataURL(audioBlob);
+          reader.onloadend = async () => {
+            const base64Audio = (reader.result as string)?.split(",")[1];
+            if (!base64Audio) {
+              console.error("[VOICE] failed to extract base64 from audio blob");
+              setMicState("error");
+              setTimeout(() => setMicState("idle"), 1500);
+              return;
+            }
+
+            console.log(`[VOICE] sending audio payload to /api/transcribe-audio, base64Length: ${base64Audio.length}, lang: ${speechLang}`);
+
+            try {
+              const response = await fetch("/api/transcribe-audio", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  audioBase64: base64Audio,
+                  mimeType,
+                  languageCode: speechLang,
+                }),
+              });
+
+              console.log(`[VOICE] server responded with status: ${response.status}`);
+              const data = await response.json();
+
+              if (response.ok && data.success) {
+                const transcript = (data.transcript || data.text || "").trim();
+
+                if (transcript) {
+                  console.log(`[VOICE] transcript received: "${transcript.substring(0, 40)}..."`);
+                  console.log("[VOICE] updating textarea (setVoiceText)...");
+                  setVoiceText((prev) => {
+                    if (!prev || !prev.trim()) {
+                      return transcript;
+                    }
+                    // Safely append to existing text without destroying user edits
+                    return `${prev.trim()} ${transcript}`;
+                  });
+                  setMicState("success");
+                  setTimeout(() => setMicState("idle"), 1500);
+                } else {
+                  console.warn("[VOICE] response contained empty transcript");
+                  alert(t("voice_no_speech"));
+                  setMicState("idle");
+                }
+              } else {
+                console.error("[VOICE] transcription server returned failure:", data.error || data);
+                setMicState("error");
+                setTimeout(() => setMicState("idle"), 1500);
+              }
+            } catch (netErr) {
+              console.error("[VOICE] transcription network error:", netErr);
+              setMicState("error");
+              setTimeout(() => setMicState("idle"), 1500);
+            }
+          };
+        } catch (readErr) {
+          console.error("[VOICE] audio FileReader error:", readErr);
           setMicState("error");
           setTimeout(() => setMicState("idle"), 1500);
-        };
-        recognition.start();
-      } else {
-        setTimeout(() => {
-          setIsRecording(false);
-          if (!voiceText) setVoiceText("यह हाथ से बनी मधुबनी पेंटिंग है।");
-          setMicState("success");
-          setTimeout(() => setMicState("idle"), 1200);
-        }, 1200);
+        }
+      };
+
+      mediaRecorder.start(250); // Slice audio in 250ms chunks
+      setIsRecording(true);
+      setMicState("listening");
+      console.log("[VOICE] recording started successfully");
+    } catch (err: any) {
+      console.error("[VOICE] microphone access denied or error:", err);
+      setIsRecording(false);
+      setMicState("error");
+      alert(t("voice_permission_denied"));
+      setTimeout(() => setMicState("idle"), 1500);
+    }
+  };
+
+  const stopAudioRecording = () => {
+    console.log("[VOICE] stopAudioRecording called");
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      try {
+        // A2: Request any buffered data before calling stop so final dataavailable fires
+        mediaRecorderRef.current.requestData();
+        console.log("[VOICE] requestData() invoked to flush buffered audio");
+      } catch (e) {
+        console.warn("[VOICE] requestData notice:", e);
       }
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+    setMicState("processing");
+  };
+
+  const handleMicToggle = () => {
+    console.log(`[VOICE] mic button clicked, currently recording: ${isRecording}`);
+    if (isRecording) {
+      stopAudioRecording();
+    } else {
+      startAudioRecording();
     }
   };
 
@@ -497,12 +666,47 @@ export default function App() {
 
     try {
       setIsLoading(true);
-      setLoadingStage(t("ai_status_enhancing"));
-
+      let originalImageUrl = photoUrl || "";
+      let transparentImageUrl = photoUrl || "";
+      let enhancedImageUrl = photoUrl || "";
       let finalImageUrl = photoUrl || "";
+
       if (selectedFile) {
+        // Stage 1: Uploading original artisan photograph
+        setLoadingStage(t("ai_status_uploading"));
         const cloudResult = await uploadToCloudinary(selectedFile);
-        finalImageUrl = cloudResult.enhancedUrl || photoUrl || "";
+        originalImageUrl = cloudResult.originalUrl || photoUrl || "";
+
+        // Stage 2: Transparent background removal via Cloudinary AI (e_background_removal:fineedges_y,f_png)
+        setLoadingStage(t("ai_status_bg_removal"));
+        transparentImageUrl = cloudResult.transparentUrl || originalImageUrl;
+
+        // Stage 3: Image Enhancement via Gemini 3.1 Flash Lite Image (Nano Banana 2 Lite, 1K output)
+        setLoadingStage(t("ai_status_enhancing"));
+        try {
+          const base64Data = await fileToBase64(selectedFile);
+          const enhanceRes = await fetch("/api/enhance-image", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              imageBase64: base64Data,
+              mimeType: selectedFile.type || "image/jpeg",
+              imageUrl: transparentImageUrl || originalImageUrl,
+            }),
+          });
+
+          if (enhanceRes.ok) {
+            const enhanceData = await enhanceRes.json();
+            if (enhanceData.success && enhanceData.enhancedUrl) {
+              enhancedImageUrl = enhanceData.enhancedUrl;
+              console.log("[IMAGE] gemini-3.1-flash-lite-image enhancement applied successfully");
+            }
+          }
+        } catch (enhanceErr) {
+          console.warn("[IMAGE] Image enhancement notice, proceeding with transparent cutout:", enhanceErr);
+        }
+
+        finalImageUrl = enhancedImageUrl || transparentImageUrl || originalImageUrl;
       }
 
       setLoadingStage(t("ai_status_understanding"));
@@ -531,7 +735,14 @@ export default function App() {
 
           const promptText = `
 You are an expert Indian Handicrafts and ONDC cultural commerce specialist for Kalakriti.
-Carefully inspect the attached photo. User voice note: "${userNote}". Category: "${categoryName}".
+Carefully inspect the attached photo. Category: "${categoryName}".
+
+ARTISAN SPOKEN CONTEXT & AUTHENTIC TESTIMONY:
+The artisan has provided this authentic description: "${userNote}".
+CRITICAL CONTEXTUAL GUIDANCE:
+- Treat the artisan's spoken words as authentic ground-truth facts regarding the craft's identity, raw materials, crafting technique, cultural/regional origin, and festive/daily purpose (e.g. if the artisan states it is a clay lamp for Diwali or handmade Madhubani painting, reflect that exact craft identity).
+- Faithfully integrate these authentic spoken details into the craft title, story, quick summary, specifications, and highlights.
+- Do NOT hallucinate conflicting materials or facts that contradict the artisan's direct testimony.
 
 ${pricingInstruction}
 
@@ -596,8 +807,8 @@ Output ONLY valid JSON matching this schema:
           if (selectedFile) {
             const base64Data = await fileToBase64(selectedFile);
             parts.push({
-              inline_data: {
-                mime_type: selectedFile.type || "image/jpeg",
+              inlineData: {
+                mimeType: selectedFile.type || "image/jpeg",
                 data: base64Data,
               },
             });
@@ -610,7 +821,7 @@ Output ONLY valid JSON matching this schema:
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 contents: [{ parts }],
-                generationConfig: { response_mime_type: "application/json" },
+                generationConfig: { responseMimeType: "application/json" },
               }),
             }
           );
@@ -806,6 +1017,9 @@ Output ONLY valid JSON matching this schema:
       const finalPayload: CatalogData = {
         ...generatedData,
         imageUrl: finalImageUrl,
+        originalImageUrl: originalImageUrl || photoUrl || "",
+        transparentImageUrl: transparentImageUrl || photoUrl || "",
+        enhancedImageUrl: enhancedImageUrl || finalImageUrl,
         imageSignature: imageSignature || (selectedFile ? `${selectedFile.name}_${selectedFile.size}` : undefined),
         language: currentLang,
       };
@@ -1136,19 +1350,20 @@ Output ONLY valid JSON matching this schema:
                     micState === "listening"
                       ? t("voice_listening")
                       : micState === "processing"
-                      ? t("processing")
+                      ? t("voice_processing")
                       : t("voice_placeholder")
                   }
                   value={voiceText}
                   onChange={(e) => setVoiceText(e.target.value)}
                 />
                 {micState === "success" && (
-                  <span className="absolute bottom-2 right-2 text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md animate-scale-in">
-                    ✓
+                  <span className="absolute bottom-2 right-2 text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md animate-scale-in flex items-center gap-1 shadow-xs">
+                    <span>✓</span>
+                    <span>{t("voice_text_added")}</span>
                   </span>
                 )}
                 {micState === "error" && (
-                  <span className="absolute bottom-2 right-2 text-xs font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md animate-scale-in">
+                  <span className="absolute bottom-2 right-2 text-xs font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md animate-scale-in shadow-xs">
                     ⚠️
                   </span>
                 )}
@@ -1160,7 +1375,7 @@ Output ONLY valid JSON matching this schema:
                 <button
                   type="button"
                   onClick={handleMicToggle}
-                  className="w-14 h-14 rounded-full flex items-center justify-center text-white text-xl shadow-md touch-press transition-all duration-200 cursor-pointer relative z-10"
+                  className="w-14 h-14 rounded-full flex items-center justify-center text-white text-xl shadow-md active:scale-95 transition-all duration-200 cursor-pointer relative z-10"
                   style={{
                     background:
                       micState === "listening"
@@ -1175,7 +1390,8 @@ Output ONLY valid JSON matching this schema:
                         ? "0 4px 18px rgba(220, 38, 38, 0.45)"
                         : "0 4px 14px rgba(107, 58, 42, 0.35)",
                   }}
-                  title={micState === "listening" ? "Stop Listening" : "Tap to Speak"}
+                  title={micState === "listening" ? t("voice_listening") : t("voice_input_title")}
+                  aria-label={micState === "listening" ? t("voice_listening") : t("voice_input_title")}
                 >
                   {micState === "listening" ? "⏹" : micState === "processing" ? "⏳" : micState === "success" ? "✓" : "🎤"}
                 </button>

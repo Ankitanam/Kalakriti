@@ -9,6 +9,9 @@ export interface CatalogData {
   title_local?: string;
   suggested_price: number;
   imageUrl?: string;
+  originalImageUrl?: string;
+  transparentImageUrl?: string;
+  enhancedImageUrl?: string;
   imageSignature?: string;
   artisan_name?: string;
   artisan_region?: string;
@@ -52,6 +55,11 @@ export default function CatalogPreview({
 
   const isNative = currentLang !== "en";
   const localized = getLocalizedProductContent(data, currentLang);
+  const [showOriginal, setShowOriginal] = useState(false);
+
+  const displayImageUrl = (showOriginal && data.originalImageUrl)
+    ? data.originalImageUrl
+    : (data.imageUrl || "https://images.unsplash.com/photo-1604264726154-26480e76f4e1?w=500");
 
   return (
     <div
@@ -130,13 +138,32 @@ export default function CatalogPreview({
           <div className="relative w-full h-64 rounded-3xl overflow-hidden shadow-md bg-stone-100 border border-[#C4886B]/30 flex-shrink-0 animate-scale-in">
             <img
               src={data.imageUrl || "https://images.unsplash.com/photo-1604264726154-26480e76f4e1?w=500"}
+              src={displayImageUrl}
               alt={data.title_en || "Product Preview"}
               className="w-full h-full object-cover"
+              className="w-full h-full object-cover transition-opacity duration-300"
             />
             {/* AI Enhanced Badge */}
             <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-xs px-3 py-1 rounded-full text-[11px] font-bold text-[#6B3A2A] shadow-xs flex items-center gap-1.5 border border-[#C4886B]/20">
               <span>{t("ai_enhanced_photo")}</span>
             </div>
+            {/* AI Enhanced / Original Toggle Badge */}
+            {data.originalImageUrl && data.originalImageUrl !== data.imageUrl ? (
+              <button
+                type="button"
+                onClick={() => setShowOriginal((prev) => !prev)}
+                className="absolute top-3 left-3 bg-white/95 backdrop-blur-xs px-3 py-1 rounded-full text-[11px] font-bold text-[#6B3A2A] shadow-xs flex items-center gap-1.5 border border-[#C4886B]/20 cursor-pointer active:scale-95 transition-all"
+              >
+                <span>{showOriginal ? `📷 ${t("original_photo")}` : `✨ ${t("ai_enhanced_photo")}`}</span>
+                <span className="text-[9px] text-[#8B4513] font-medium underline">
+                  ({showOriginal ? t("view_enhanced") : t("view_original")})
+                </span>
+              </button>
+            ) : (
+              <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-xs px-3 py-1 rounded-full text-[11px] font-bold text-[#6B3A2A] shadow-xs flex items-center gap-1.5 border border-[#C4886B]/20">
+                <span>{t("ai_enhanced_photo")}</span>
+              </div>
+            )}
             {/* ONDC Certified Badge */}
             <div className="absolute top-3 right-3 bg-emerald-700 text-white px-2.5 py-1 rounded-full text-[10px] font-bold shadow-xs flex items-center gap-1">
               <span>{t("ondc_verified_badge")}</span>

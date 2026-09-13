@@ -13,6 +13,8 @@ import {
   createOndcAuthHeader,
   verifyOndcSignature,
 } from "./src/utils/ondc/ondcCrypto.ts";
+import { transcribeAudioPayload, CRAFT_VOCABULARY } from "./src/utils/transcribeService.ts";
+import { enhanceImagePayload } from "./src/utils/imageService.ts";
 
 dotenv.config();
 
@@ -501,6 +503,88 @@ app.post("/api/generate-catalog", async (req, res) => {
   } catch (error) {
     console.error("Backend error:", error);
     res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// ═════════════════════════════════════════════════════════════
+// 4. MULTILINGUAL SPEECH-TO-TEXT TRANSCRIPTION ENDPOINT
+// ═════════════════════════════════════════════════════════════
+const CRAFT_VOCABULARY = [
+  "Kalakriti", "कलाकृति", "कलाकृती",
+  "ONDC", "ओएनडीसी",
+  "terracotta", "टेराकोटा",
+  "Madhubani", "मधुबनी",
+  "Warli", "वारली",
+  "Pattachitra", "पट्टचित्र",
+  "Chikankari", "चिकनकारी",
+  "Banarasi", "बनारसी",
+  "Dhokra", "ढोकरा",
+  "Kathputli", "कठपुतली", "कठपुतळी",
+  "handicraft", "हस्तशिल्प", "हस्तकला",
+  "pottery", "मातीकाम", "कुंभारकाम",
+  "diya", "दिवा", "दीपक",
+  "kalash", "कलश", "घडा",
+];
+
+app.post("/api/transcribe-audio", async (req, res) => {
+  try {
+    const { audioBase64, mimeType, languageCode } = req.body;
+    const geminiKey = process.env.VITE_GEMINI_KEY || process.env.VITE_GEMINI_API_KEY;
+
+    if (!geminiKey) {
+      return res.status(500).json({ success: false, error: "Gemini API key not configured on server" });
+    }
+
+    if (!audioBase64) {
+      return res.status(400).json({ success: false, error: "No audio data provided" });
+    }
+
+    const result = await transcribeAudioPayload({
+      audioBase64,
+      mimeType,
+      languageCode,
+      geminiKey,
+    });
+
+    if (!result.success) {
+      return res.status(500).json(result);
+    }
+
+    res.json(result);
+  } catch (err) {
+    console.error("[VOICE API] endpoint error:", err);
+    res.status(500).json({ success: false, error: err.message || "Internal Server Error" });
+  }
+});
+
+app.post("/api/enhance-image", async (req, res) => {
+  try {
+    const { imageBase64, mimeType, imageUrl } = req.body;
+    const geminiKey = process.env.VITE_GEMINI_KEY || process.env.VITE_GEMINI_API_KEY;
+
+    if (!geminiKey) {
+      return res.status(500).json({ success: false, error: "Gemini API key not configured on server" });
+    }
+
+    if (!imageBase64) {
+      return res.status(400).json({ success: false, error: "No image data provided" });
+    }
+
+    const result = await enhanceImagePayload({
+      imageBase64,
+      mimeType,
+      imageUrl,
+      geminiKey,
+    });
+
+    if (!result.success) {
+      return res.status(500).json(result);
+    }
+
+    res.json(result);
+  } catch (err) {
+    console.error("[IMAGE API] endpoint error:", err);
+    res.status(500).json({ success: false, error: err.message || "Internal Server Error" });
   }
 });
 
