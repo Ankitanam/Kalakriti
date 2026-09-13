@@ -990,9 +990,21 @@ Output ONLY valid JSON matching this schema:
 
   // ── ROUTING ──
   // 0. 3D Fair
-  if (showGame) {
-    return <GameWorld onExit={() => setShowGame(false)} />;
-  }
+  // ── ROUTING ──
+
+// 0. 3D Craft Fair
+if (showGame) {
+  return (
+    <GameWorld
+      onExit={() => {
+        // Leave the 3D fair and return to Marketplace
+        setShowGame(false);
+        setScreen("marketplace");
+      }}
+    />
+  );
+}
+ 
   if (!isLoggedIn || screen === "onboarding") {
     return <OnboardingScreen initialRole={activeRole} onLogin={handleLoginSuccess} />;
   }
