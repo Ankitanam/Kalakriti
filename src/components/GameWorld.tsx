@@ -1,5 +1,5 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Html } from "@react-three/drei";
+import { Html, Text } from "@react-three/drei";
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { supabase } from "../lib/supabase";
@@ -18,12 +18,17 @@ export interface GameWorldProps {
 export type DatabaseProduct = {
   id: string;
   title: string;
+  title_en?: string;
+  title_hi?: string;
   artisan_id: string;
   description: string;
+  story?: string;
   image_url: string;
   category: string;
+  categoryName?: string;
   price: number | string;
   stock: number;
+  source?: "local" | "remote";
 
   artisan?: {
     id: string;
@@ -439,27 +444,20 @@ function Stall({
         <meshStandardMaterial color="#4e2f1e" />
       </mesh>
 
-      <Html
+      <Text
         position={[0, 4.25, -1.57]}
-        center
+        rotation={[0, Math.PI, 0]}
+        fontSize={0.32}
+        maxWidth={3.1}
+        anchorX="center"
+        anchorY="middle"
+        color="#f6dfb0"
+        outlineWidth={0.025}
+        outlineColor="#2e1b11"
+        depthOffset={-1}
       >
-        <div
-          style={{
-            background: "#4e2f1e",
-            color: "#f6dfb0",
-            padding: "8px 18px",
-            borderRadius: "5px",
-            fontWeight: "bold",
-            fontSize: "15px",
-            whiteSpace: "nowrap",
-            border: "2px solid #2e1b11",
-            boxShadow:
-              "0 4px 10px rgba(0,0,0,0.3)",
-          }}
-        >
-          {name}
-        </div>
-      </Html>
+        {name}
+      </Text>
 
       {/* =====================================================
           COUNTER
@@ -841,8 +839,10 @@ function isBlocked(x: number, z: number) {
 
 function Player({
   onEnterStall,
+  hideInteractionPrompt = false,
 }: {
   onEnterStall: (stallName: string) => void;
+  hideInteractionPrompt?: boolean;
 }) {
   const playerRef = useRef<THREE.Group>(null);
 
@@ -1516,9 +1516,9 @@ function Player({
           STALL INTERACTION MESSAGE
       ========================= */}
 
-      {nearStall && (
+      {nearStall && !hideInteractionPrompt && (
         <Html
-          position={[0, 2.8, 0]}
+          position={[0, 3.55, 0]}
           center
         >
           <div
@@ -1550,9 +1550,11 @@ function Player({
 function World({
   onEnterStall,
   dbProducts,
+  hideInteractionPrompt = false,
 }: {
   onEnterStall: (name: string) => void;
   dbProducts: DatabaseProduct[];
+  hideInteractionPrompt?: boolean;
 }) {
   return (
     <>
@@ -1597,6 +1599,7 @@ function World({
 
       <Player
         onEnterStall={onEnterStall}
+        hideInteractionPrompt={hideInteractionPrompt}
       />
 
       {/* =====================================================
@@ -1718,22 +1721,14 @@ function ShopPanel({
 
     if (name.includes("weav") || name.includes("handloom")) {
       return [
-        "weaving", "weave", "textile", "handloom", "saree",
-        "silk", "fabric", "cloth", "embroidery", "बुनाई", "कढ़ाई"
+        "weaving", "weave", "textile", "handloom", "saree", "silk",
+        "fabric", "cloth", "बुनाई", "कढ़ाई"
       ];
     }
 
     if (name.includes("jewel")) {
       return [
-        "jewellery", "jewelry", "jewel", "ornament",
-        "gold", "silver", "आभूषण"
-      ];
-    }
-
-    if (name.includes("metal")) {
-      return [
-        "metal", "metalwork", "brass", "copper", "iron",
-        "पीतल", "तांबा"
+        "jewellery", "jewelry", "jewel", "ornament", "gold", "silver", "आभूषण"
       ];
     }
 
@@ -1746,7 +1741,7 @@ function ShopPanel({
     return [];
   };
 
-  const keywords = getStallKeywords(normalizedStall);
+  const stallKeywords = getStallKeywords(normalizedStall);
 
   const stallProducts = dbProducts.filter((product) => {
     if (product.artisan?.name?.toLowerCase() === stallName.toLowerCase()) {
@@ -1757,16 +1752,19 @@ function ShopPanel({
     }
     const searchableText = [
       product.title,
+      product.title_en,
+      product.title_hi,
       product.category,
+      product.categoryName,
       product.description,
-      (product as any).material,
-      (product as any).craft,
+      product.story,
+      product.artisan?.name,
     ]
       .filter(Boolean)
       .join(" ")
       .toLowerCase();
 
-    return keywords.some((keyword) =>
+    return stallKeywords.some((keyword) =>
       searchableText.includes(keyword.toLowerCase())
     );
   });
@@ -1921,6 +1919,41 @@ function ShopPanel({
                   )}
                 </div>
 
+                {/* PRODUCT STORY */}
+                <div
+                  style={{
+                    margin: "0 18px 0",
+                    padding: "12px 14px",
+                    borderRadius: "10px",
+                    background: "#f7efe3",
+                    border: "1px solid #ead9c3",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: "700",
+                      letterSpacing: "1px",
+                      color: "#8b6f52",
+                      textTransform: "uppercase",
+                      marginBottom: "5px",
+                    }}
+                  >
+                    The Story Behind the Craft
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "13px",
+                      lineHeight: "1.55",
+                      color: "#5f5146",
+                    }}
+                  >
+                    {product.story ||
+                      product.description ||
+                      "A handmade craft carrying the skill and tradition of its artisan."}
+                  </div>
+                </div>
+
                 {/* PRODUCT DETAILS */}
 
                 <div
@@ -2011,7 +2044,7 @@ function ShopPanel({
             fontSize: "15px",
           }}
         >
-          ← Back to Fair
+          ← Back to Marketplace
         </button>
       </div>
     </div>
@@ -2021,11 +2054,14 @@ function ShopPanel({
 /* =========================================================
    MAIN GAME
 ========================================================= */
+
 export default function GameWorld({
   onExit,
   inventory = [],
   onAddToCart,
 }: GameWorldProps) {
+
+
   const [enteredStall, setEnteredStall] =
     useState<string | null>(null);
 
@@ -2044,9 +2080,6 @@ export default function GameWorld({
 
   const [loadingProducts, setLoadingProducts] =
     useState(true);
-
-  const mappedFallback = mapInventoryToStallProducts(inventory);
-  const effectiveProducts = dbProducts.length > 0 ? dbProducts : mappedFallback;
 
   const handleEnterStall = (stallName: string) => {
     setEnteredStall(stallName);
@@ -2110,135 +2143,133 @@ export default function GameWorld({
   );
 
   /* =====================================================
-     CATALOGUE PRODUCTS
+     KALAKRITI LOCAL CATALOGUE
+     Seller catalogue writes here:
+       localStorage["kalakriti_inventory"]
+     This is merged into the fair immediately.
+  ===================================================== */
 
-     The artisan catalogue stores published products in
-     localStorage under "kalakriti_inventory".
-     Read that same source so products appear in the fair
-     immediately after catalogue publish.
+  const convertLocalInventory = (items: any[]): DatabaseProduct[] =>
+    (items || [])
+      .filter((item) => Number(item.quantity ?? 1) > 0)
+      .map((item) => ({
+        id: String(item.id ?? `local-${Date.now()}`),
+        title:
+          item.title_en ||
+          item.title ||
+          item.title_hi ||
+          item.title_local ||
+          "Handmade Craft",
+        title_en: item.title_en,
+        title_hi: item.title_hi,
+        artisan_id: String(item.artisan_id ?? "local-artisan"),
+        description:
+          item.quick_summary_en ||
+          item.description ||
+          item.quick_summary_hi ||
+          "Handmade product by an Indian artisan.",
+        story:
+          item.story_en ||
+          item.story_hi ||
+          item.description ||
+          item.quick_summary_en ||
+          "",
+        image_url: item.imageUrl || item.image_url || "",
+        category: item.categoryName || item.category || item.craft || "",
+        categoryName: item.categoryName,
+        price: Number(item.suggested_price ?? item.price ?? 0),
+        stock: Math.max(0, Number(item.quantity ?? 1)),
+        source: "local" as const,
+        artisan: {
+          id: String(item.artisan_id ?? "local-artisan"),
+          name: item.artisan_name || item.artisanName || "Kalakriti Artisan",
+          bio: null,
+          location: item.artisan_region || item.location || null,
+        },
+      }));
 
-     Supabase remains a fallback/legacy source.
+  const [localCatalogueProducts, setLocalCatalogueProducts] =
+    useState<DatabaseProduct[]>(() => {
+      try {
+        const saved = localStorage.getItem("kalakriti_inventory");
+        return convertLocalInventory(saved ? JSON.parse(saved) : inventory);
+      } catch {
+        return convertLocalInventory(inventory);
+      }
+    });
+
+  const refreshLocalCatalogue = () => {
+    try {
+      const saved = localStorage.getItem("kalakriti_inventory");
+      setLocalCatalogueProducts(
+        convertLocalInventory(saved ? JSON.parse(saved) : inventory)
+      );
+    } catch (error) {
+      console.warn("Catalogue sync failed:", error);
+    }
+  };
+
+  useEffect(() => {
+    refreshLocalCatalogue();
+
+    const sync = () => refreshLocalCatalogue();
+    window.addEventListener("storage", sync);
+    window.addEventListener("focus", sync);
+    document.addEventListener("visibilitychange", sync);
+
+    // App dispatches a custom "storage" event after every catalogue save.
+    // Polling is a fallback for same-tab state changes.
+    const timer = window.setInterval(refreshLocalCatalogue, 1000);
+
+    return () => {
+      window.removeEventListener("storage", sync);
+      window.removeEventListener("focus", sync);
+      document.removeEventListener("visibilitychange", sync);
+      window.clearInterval(timer);
+    };
+  }, [inventory]);
+
+  /* =====================================================
+     SUPABASE PRODUCTS
   ===================================================== */
 
   useEffect(() => {
-    let mounted = true;
-
-    const normalize = (value: unknown) =>
-      String(value ?? "")
-        .toLowerCase()
-        .normalize("NFKD")
-        .replace(/[\\u0300-\\u036f]/g, "")
-        .trim();
-
-    const localInventoryToProducts = (): DatabaseProduct[] => {
-      try {
-        const raw = localStorage.getItem("kalakriti_inventory");
-        if (!raw) return [];
-
-        const items = JSON.parse(raw);
-        if (!Array.isArray(items)) return [];
-
-        return items.map((item: any, index: number) => ({
-          id: String(item.id ?? `catalog-${index}`),
-          artisan_id: String(
-            item.artisan_id ?? item.artisanId ?? "local-catalogue-artisan"
-          ),
-          title:
-            item.title_en ||
-            item.title ||
-            item.title_hi ||
-            item.title_local ||
-            "Handmade Product",
-          description:
-            item.quick_summary_en ||
-            item.quick_summary_hi ||
-            item.description ||
-            item.story_en ||
-            item.story_hi ||
-            "Handcrafted product from a Kalakriti artisan.",
-          image_url:
-            item.imageUrl ||
-            item.enhancedImageUrl ||
-            item.originalImageUrl ||
-            "",
-          category:
-            item.categoryName ||
-            item.category ||
-            item.craft ||
-            item.localizedContent?.craft ||
-            "",
-          price: Number(
-            item.suggested_price ?? item.suggestedPrice ?? item.price ?? 0
-          ),
-          stock: Math.max(0, Number(item.quantity ?? item.stock ?? 1)),
-          artisan: {
-            id: String(
-              item.artisan_id ?? item.artisanId ?? "local-catalogue-artisan"
-            ),
-            name:
-              item.artisan_name ||
-              item.artisanName ||
-              "Kalakriti Artisan",
-            bio:
-              item.quick_summary_en ||
-              item.quick_summary_hi ||
-              null,
-            location:
-              item.artisan_region || item.location || null,
-          },
-        }));
-      } catch (error) {
-        console.error("Catalogue localStorage error:", error);
-        return [];
-      }
-    };
-
-    const mergeProducts = (
-      localProducts: DatabaseProduct[],
-      remoteProducts: DatabaseProduct[]
-    ) => {
-      const merged = [...localProducts];
-
-      for (const remote of remoteProducts) {
-        const remoteTitle = normalize(remote.title);
-        const alreadyExists = merged.some(
-          (local) =>
-            local.id === remote.id ||
-            (remoteTitle && normalize(local.title) === remoteTitle)
-        );
-
-        if (!alreadyExists) merged.push(remote);
-      }
-
-      return merged;
-    };
-
     const fetchProducts = async () => {
-      // LOCAL CATALOGUE IS THE PRIMARY SOURCE.
-      // This is what makes a newly published catalogue item appear
-      // without requiring the seller to add it again manually.
-      const localProducts = localInventoryToProducts();
+      setLoadingProducts(true);
 
-      if (mounted) {
-        setDbProducts(localProducts);
-        setLoadingProducts(false);
-      }
-
-      // Also load existing Supabase products.
-      const { data: productData, error: productError } = await supabase
+      const {
+        data: productData,
+        error: productError,
+      } = await supabase
         .from("products")
         .select("*")
-        .order("created_at", { ascending: false });
+        .order("created_at", {
+          ascending: false,
+        });
 
       if (productError) {
-        console.error("Supabase products error:", productError);
+        console.error(
+          "Products error:",
+          productError
+        );
+
+        setLoadingProducts(false);
+
         return;
       }
+
+      console.log(
+        "Products from Supabase:",
+        productData
+      );
 
       const artisanIds = [
         ...new Set(
           (productData || [])
-            .map((product) => product.artisan_id)
+            .map(
+              (product) =>
+                product.artisan_id
+            )
             .filter(Boolean)
         ),
       ];
@@ -2246,74 +2277,76 @@ export default function GameWorld({
       let profiles: any[] = [];
 
       if (artisanIds.length > 0) {
-        const { data: profileData, error: profileError } = await supabase
+        const {
+          data: profileData,
+          error: profileError,
+        } = await supabase
           .from("profiles")
-          .select("id, name, bio, location")
+          .select(
+            "id, name, bio, location"
+          )
           .in("id", artisanIds);
 
         if (profileError) {
-          console.error("Profiles error:", profileError);
+          console.error(
+            "Profiles error:",
+            profileError
+          );
         } else {
           profiles = profileData || [];
         }
       }
 
-      const remoteProducts = (productData || []).map((product) => ({
+      const combinedProducts = (
+        productData || []
+      ).map((product) => ({
         ...product,
+
         artisan:
           profiles.find(
-            (profile) => profile.id === product.artisan_id
+            (profile) =>
+              profile.id ===
+              product.artisan_id
           ) || null,
-      })) as DatabaseProduct[];
+      }));
 
-      if (mounted) {
-        setDbProducts(
-          mergeProducts(localInventoryToProducts(), remoteProducts)
-        );
-      }
+      console.log(
+        "Products with artisans:",
+        combinedProducts
+      );
+
+      const remoteProducts = combinedProducts as DatabaseProduct[];
+
+      // Local catalogue is the source used by the current Kalakriti seller flow.
+      // Keep Supabase products too, but don't duplicate local products.
+      const mergedProducts = [
+        ...localCatalogueProducts,
+        ...remoteProducts.filter(
+          (remote) =>
+            !localCatalogueProducts.some(
+              (local) =>
+                String(local.id) === String(remote.id) ||
+                String(local.title).trim().toLowerCase() ===
+                  String(remote.title ?? "").trim().toLowerCase()
+            )
+        ),
+      ];
+
+      setDbProducts(mergedProducts);
+
+      setLoadingProducts(false);
     };
 
     fetchProducts();
-
-    // App.tsx dispatches this event immediately after it writes the
-    // catalogue to localStorage. This handles SAME-TAB updates.
-    const handleCatalogueChanged = () => {
-      console.log("Catalogue updated — refreshing 3D fair");
-      const localProducts = localInventoryToProducts();
-      if (mounted) {
-        setDbProducts(localProducts);
-        setLoadingProducts(false);
-      }
-      fetchProducts();
-    };
-
-    window.addEventListener("storage", handleCatalogueChanged);
-
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") fetchProducts();
-    };
-
-    document.addEventListener("visibilitychange", handleVisibility);
-
-    // Backup polling for updates made from another tab.
-    const refreshTimer = window.setInterval(() => {
-      if (document.visibilityState !== "visible" || !mounted) return;
-
-      const localProducts = localInventoryToProducts();
-      setDbProducts((current) => {
-        const currentKey = current.map((p) => p.id).join("|");
-        const localKey = localProducts.map((p) => p.id).join("|");
-        return currentKey === localKey ? current : localProducts;
-      });
-    }, 1500);
-
-    return () => {
-      mounted = false;
-      window.removeEventListener("storage", handleCatalogueChanged);
-      document.removeEventListener("visibilitychange", handleVisibility);
-      window.clearInterval(refreshTimer);
-    };
   }, []);
+
+  const mappedFallback = mapInventoryToStallProducts(inventory);
+  const effectiveProducts =
+    dbProducts.length > 0
+      ? dbProducts
+      : localCatalogueProducts.length > 0
+      ? localCatalogueProducts
+      : mappedFallback;
 
   /* =====================================================
      RETURN
@@ -2557,6 +2590,7 @@ export default function GameWorld({
         <World
           onEnterStall={handleEnterStall}
           dbProducts={effectiveProducts}
+          hideInteractionPrompt={Boolean(enteredStall)}
         />
       </Canvas>
 
