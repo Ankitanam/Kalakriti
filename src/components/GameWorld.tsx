@@ -1466,6 +1466,11 @@ type DatabaseProduct = {
   category: string;
   price: number | string;
   stock: number;
+  source?: "local" | "supabase";
+  categoryName?: string;
+  title_en?: string;
+  title_hi?: string;
+  story?: string;
 
   artisan?: {
     id: string;
@@ -1630,10 +1635,38 @@ function ShopPanel({
   ) => void;
   dbProducts: DatabaseProduct[];
 }) {
-  const stallProducts = dbProducts.filter(
-    (product) =>
-      product.artisan?.name === stallName
-  );
+  const normalizedStall = stallName.toLowerCase();
+
+  const stallKeywords =
+    normalizedStall.includes("wood")
+      ? ["wood", "wooden", "woodwork", "puppet", "doll", "kathputli", "लकड़ी", "लकड़ी", "कठपुतली"]
+      : normalizedStall.includes("pottery") || normalizedStall.includes("pot")
+        ? ["pottery", "pot", "clay", "ceramic", "terracotta", "mitti", "मिट्टी", "मृत्तिका"]
+        : normalizedStall.includes("weav") || normalizedStall.includes("handloom")
+          ? ["weaving", "weave", "textile", "handloom", "saree", "silk", "fabric", "cloth", "बुनाई", "कढ़ाई"]
+          : normalizedStall.includes("jewel")
+            ? ["jewellery", "jewelry", "jewel", "ornament", "gold", "silver", "आभूषण"]
+            : [];
+
+  const stallProducts = dbProducts.filter((product) => {
+    const searchableText = [
+      product.title,
+      product.title_en,
+      product.title_hi,
+      product.category,
+      product.categoryName,
+      product.description,
+      product.story,
+      product.artisan?.name,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return stallKeywords.some((keyword) =>
+      searchableText.includes(keyword.toLowerCase())
+    );
+  });
 
   return (
     <div
@@ -1783,6 +1816,41 @@ function ShopPanel({
                   )}
                 </div>
 
+                {/* PRODUCT STORY */}
+                <div
+                  style={{
+                    margin: "0 18px 0",
+                    padding: "12px 14px",
+                    borderRadius: "10px",
+                    background: "#f7efe3",
+                    border: "1px solid #ead9c3",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: "700",
+                      letterSpacing: "1px",
+                      color: "#8b6f52",
+                      textTransform: "uppercase",
+                      marginBottom: "5px",
+                    }}
+                  >
+                    The Story Behind the Craft
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "13px",
+                      lineHeight: "1.55",
+                      color: "#5f5146",
+                    }}
+                  >
+                    {product.story ||
+                      product.description ||
+                      "A handmade craft carrying the skill and tradition of its artisan."}
+                  </div>
+                </div>
+
                 {/* PRODUCT DETAILS */}
 
                 <div
@@ -1884,9 +1952,10 @@ function ShopPanel({
 ========================================================= */
 interface GameWorldProps {
   onExit: () => void;
+  inventory?: any[];
 }
 
-export default function GameWorld({ onExit }: GameWorldProps) {
+export default function GameWorld({ onExit, inventory = [] }: GameWorldProps) {
 
 
   const [enteredStall, setEnteredStall] =
@@ -1947,6 +2016,93 @@ export default function GameWorld({ onExit }: GameWorldProps) {
     },
     0
   );
+
+  /* =====================================================
+     KALAKRITI LOCAL CATALOGUE
+     Seller catalogue writes here:
+       localStorage["kalakriti_inventory"]
+     This is merged into the fair immediately.
+  ===================================================== */
+
+  const convertLocalInventory = (items: any[]): DatabaseProduct[] =>
+    (items || [])
+      .filter((item) => Number(item.quantity ?? 1) > 0)
+      .map((item) => ({
+        id: String(item.id ?? `local-${Date.now()}`),
+        title:
+          item.title_en ||
+          item.title ||
+          item.title_hi ||
+          item.title_local ||
+          "Handmade Craft",
+        title_en: item.title_en,
+        title_hi: item.title_hi,
+        artisan_id: String(item.artisan_id ?? "local-artisan"),
+        description:
+          item.quick_summary_en ||
+          item.description ||
+          item.quick_summary_hi ||
+          "Handmade product by an Indian artisan.",
+        story:
+          item.story_en ||
+          item.story_hi ||
+          item.description ||
+          item.quick_summary_en ||
+          "",
+        image_url: item.imageUrl || item.image_url || "",
+        category: item.categoryName || item.category || item.craft || "",
+        categoryName: item.categoryName,
+        price: Number(item.suggested_price ?? item.price ?? 0),
+        stock: Math.max(0, Number(item.quantity ?? 1)),
+        source: "local" as const,
+        artisan: {
+          id: String(item.artisan_id ?? "local-artisan"),
+          name: item.artisan_name || item.artisanName || "Kalakriti Artisan",
+          bio: null,
+          location: item.artisan_region || item.location || null,
+        },
+      }));
+
+  const [localCatalogueProducts, setLocalCatalogueProducts] =
+    useState<DatabaseProduct[]>(() => {
+      try {
+        const saved = localStorage.getItem("kalakriti_inventory");
+        return convertLocalInventory(saved ? JSON.parse(saved) : inventory);
+      } catch {
+        return convertLocalInventory(inventory);
+      }
+    });
+
+  const refreshLocalCatalogue = () => {
+    try {
+      const saved = localStorage.getItem("kalakriti_inventory");
+      setLocalCatalogueProducts(
+        convertLocalInventory(saved ? JSON.parse(saved) : inventory)
+      );
+    } catch (error) {
+      console.warn("Catalogue sync failed:", error);
+    }
+  };
+
+  useEffect(() => {
+    refreshLocalCatalogue();
+
+    const sync = () => refreshLocalCatalogue();
+    window.addEventListener("storage", sync);
+    window.addEventListener("focus", sync);
+    document.addEventListener("visibilitychange", sync);
+
+    // App dispatches a custom "storage" event after every catalogue save.
+    // Polling is a fallback for same-tab state changes.
+    const timer = window.setInterval(refreshLocalCatalogue, 1000);
+
+    return () => {
+      window.removeEventListener("storage", sync);
+      window.removeEventListener("focus", sync);
+      document.removeEventListener("visibilitychange", sync);
+      window.clearInterval(timer);
+    };
+  }, [inventory]);
 
   /* =====================================================
      SUPABASE PRODUCTS
@@ -2034,9 +2190,24 @@ export default function GameWorld({ onExit }: GameWorldProps) {
         combinedProducts
       );
 
-      setDbProducts(
-        combinedProducts as DatabaseProduct[]
-      );
+      const remoteProducts = combinedProducts as DatabaseProduct[];
+
+      // Local catalogue is the source used by the current Kalakriti seller flow.
+      // Keep Supabase products too, but don't duplicate local products.
+      const mergedProducts = [
+        ...localCatalogueProducts,
+        ...remoteProducts.filter(
+          (remote) =>
+            !localCatalogueProducts.some(
+              (local) =>
+                String(local.id) === String(remote.id) ||
+                String(local.title).trim().toLowerCase() ===
+                  String(remote.title ?? "").trim().toLowerCase()
+            )
+        ),
+      ];
+
+      setDbProducts(mergedProducts);
 
       setLoadingProducts(false);
     };
