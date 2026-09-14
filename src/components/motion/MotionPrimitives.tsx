@@ -135,8 +135,13 @@ export function AnimatedNumber({
     const startVal = prevValueRef.current;
     const endVal = value;
 
-    if (startVal === endVal) {
+    if (
+      startVal === endVal ||
+      (typeof window !== "undefined" &&
+        window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches)
+    ) {
       setDisplayValue(endVal);
+      prevValueRef.current = endVal;
       return;
     }
 

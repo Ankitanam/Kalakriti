@@ -1057,6 +1057,13 @@ export function areItemsDuplicate(
     return true;
   }
 
+  // 6b. Match by Hindi title in localizedContent if present
+  const hiA = (a.title_hi || (a as any).localizedContent?.hi?.title || "").trim().toLowerCase();
+  const hiB = (b.title_hi || (b as any).localizedContent?.hi?.title || "").trim().toLowerCase();
+  if (hiA && hiB && hiA === hiB) {
+    return true;
+  }
+
   // 7. Craft keyword + color / visual attribute matching
   const kwA = extractCoreKeyword(`${a.title_en} ${titleA}`);
   const kwB = extractCoreKeyword(`${b.title_en} ${titleB}`);

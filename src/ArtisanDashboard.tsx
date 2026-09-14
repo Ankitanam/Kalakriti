@@ -15,6 +15,9 @@ export interface OrderItem {
   courier: "India Post (डाक घर)" | "Delhivery";
   status: "Pending" | "Packed" | "Shipped";
   orderDate: string;
+  productId?: string;
+  quantity?: number;
+  sellerName?: string;
 }
 
 interface ArtisanDashboardProps {
@@ -58,8 +61,19 @@ export default function ArtisanDashboard({
     }
   });
 
-  const orders = propOrders && propOrders.length > 0 ? propOrders : localOrders;
-  const totalUnits = inventory.reduce((sum, item) => sum + (item.quantity || 1), 0);
+  const rawOrders = propOrders && propOrders.length > 0 ? propOrders : localOrders;
+  const inventoryIds = new Set(inventory.map((item) => item.id));
+  const inventoryTitles = new Set(
+    inventory.map((item) => item.title_hi || item.title_en || item.title_local).filter(Boolean)
+  );
+  const orders = rawOrders.filter((o) => {
+    if (inventory.length === 0) return false;
+    if (o.productId && inventoryIds.has(o.productId)) return true;
+    if (o.productTitle && inventoryTitles.has(o.productTitle)) return true;
+    if (o.sellerName && inventory.some((i) => i.artisan_name === o.sellerName)) return true;
+    return false;
+  });
+  const totalUnits = inventory.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
   const earnings = calculateArtisanEarnings(orders);
   const totalRevenue = earnings.grossSales;
   const pendingOrders = orders.filter((o) => o.status === "Pending").length;
@@ -298,6 +312,13 @@ export default function ArtisanDashboard({
                         >
                           📜 {t("certified_badge")}
                         </button>
+                        {(item.quantity ?? 0) <= 0 && (
+                          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
+                            <span className="bg-red-600 text-white font-bold text-[10px] px-2 py-0.5 rounded shadow-sm">
+                              {currentLang === "hi" ? "स्टॉक समाप्त" : "Out of Stock"}
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       <div className="p-2.5 flex-1 flex flex-col justify-between">
@@ -319,11 +340,18 @@ export default function ArtisanDashboard({
                           <div className="flex items-center gap-1 bg-[#FFF0E5] px-1 py-0.5 rounded border border-[#EAC9B0]">
                             <button
                               type="button"
+                              disabled={(item.quantity ?? 0) <= 0}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                onDecreaseQty(item.id);
+                                if ((item.quantity ?? 0) > 0) {
+                                  onDecreaseQty(item.id);
+                                }
                               }}
-                              className="w-4 h-4 rounded bg-white text-[#6B3A2A] font-bold text-xs flex items-center justify-center shadow-2xs touch-press"
+                              className={`w-4 h-4 rounded font-bold text-xs flex items-center justify-center shadow-2xs touch-press ${
+                                (item.quantity ?? 0) <= 0
+                                  ? "bg-stone-200 text-stone-400 cursor-not-allowed opacity-50"
+                                  : "bg-white text-[#6B3A2A]"
+                              }`}
                             >
                               −
                             </button>
@@ -331,7 +359,7 @@ export default function ArtisanDashboard({
                               key={item.quantity}
                               className="font-bold text-xs text-[#3D1F0F] min-w-3 text-center inline-block animate-badge-bump"
                             >
-                              {item.quantity || 1}
+                              {item.quantity ?? 0}
                             </span>
                             <button
                               type="button"

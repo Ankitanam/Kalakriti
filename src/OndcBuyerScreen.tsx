@@ -28,7 +28,9 @@ import {
   getLocalizedLevelTitle,
   getLocalizedBadge,
   getLocalizedQuest,
+  getNextLevelInfo,
 } from "./utils/gamificationService";
+import { AnimatedNumber } from "./components/motion/MotionPrimitives";
 
 interface OndcBuyerScreenProps {
   inventory: StoreItem[];
@@ -92,7 +94,7 @@ export default function OndcBuyerScreen({
     }
   });
 
-  // सेलर जब भी स्टॉक बदले, बायर पेज पर रीयल-टाइम ऑटो सिंक
+  // सेलर जब भी स्टॉक बदले या Craft Fair / अन्य स्क्रीन से कार्ट बदले, बायर पेज पर रीयल-टाइम ऑटो सिंक
   useEffect(() => {
     const handleSync = () => {
       try {
@@ -100,8 +102,12 @@ export default function OndcBuyerScreen({
         if (saved) {
           setLiveInventory(JSON.parse(saved));
         }
+        const savedCart = localStorage.getItem("kalakriti_cart");
+        if (savedCart) {
+          setCart(JSON.parse(savedCart));
+        }
       } catch (e) {
-        console.warn("इन्वेंट्री सिंक एरर:", e);
+        console.warn("इन्वेंट्री / कार्ट सिंक एरर:", e);
       }
     };
 
@@ -242,6 +248,47 @@ export default function OndcBuyerScreen({
     }
   };
 
+  // Revalidate cart items against fresh inventory before checkout or stage change
+  const validateCartItemsAgainstStock = (): boolean => {
+    let freshInv: StoreItem[] = liveInventory;
+    try {
+      const saved = localStorage.getItem("kalakriti_inventory");
+      if (saved) {
+        freshInv = JSON.parse(saved);
+      }
+    } catch {}
+
+    for (const c of cart) {
+      const matched = freshInv.find((inv) => inv.id === c.product.id);
+      if (!matched) {
+        alert(
+          currentLang === "hi"
+            ? `क्षमा करें, "${getDisplayTitle(c.product)}" अब उपलब्ध नहीं है। कृपया इसे कार्ट से हटाएं।`
+            : `Sorry, "${getDisplayTitle(c.product)}" is no longer available. Please remove it from your cart.`
+        );
+        return false;
+      }
+      const available = Math.max(0, Number(matched.quantity ?? 0));
+      if (available <= 0) {
+        alert(
+          currentLang === "hi"
+            ? `क्षमा करें, "${getDisplayTitle(c.product)}" का स्टॉक समाप्त हो चुका है।`
+            : `Sorry, "${getDisplayTitle(c.product)}" is out of stock.`
+        );
+        return false;
+      }
+      if (c.quantity > available) {
+        alert(
+          currentLang === "hi"
+            ? `क्षमा करें, "${getDisplayTitle(c.product)}" के केवल ${available} पीस उपलब्ध हैं। कृपया कार्ट में संख्या घटाएं।`
+            : `Sorry, only ${available} items available for "${getDisplayTitle(c.product)}". Please adjust cart quantity.`
+        );
+        return false;
+      }
+    }
+    return true;
+  };
+
   // ── Step 4 & 5: Save Address, Deduct Stock & Sync Orders (E-Commerce Logic) ──
   const handleFinalOrderPlacement = () => {
     if (!address.fullName || !address.phone || !address.pincode || !address.street) {
@@ -254,14 +301,25 @@ export default function OndcBuyerScreen({
       return;
     }
 
+    if (!validateCartItemsAgainstStock()) {
+      return;
+    }
+
     localStorage.setItem("kalakriti_buyer_address", JSON.stringify(address));
 
     // 1. ONDC Beckn Transaction Execute
     const orderResult = executeBecknConfirm(cart, address, "UPI (PhonePe / GPay)");
     setConfirmedOrderDetails(orderResult);
 
+    // Read freshest inventory
+    let freshInventory = liveInventory;
+    try {
+      const saved = localStorage.getItem("kalakriti_inventory");
+      if (saved) freshInventory = JSON.parse(saved);
+    } catch {}
+
     // 2. सेलर की इन्वेंट्री में से खरीदे गए सभी सामानों का स्टॉक घटाएं
-    const updatedInventory = liveInventory.map((invItem) => {
+    const updatedInventory = freshInventory.map((invItem) => {
       const cartMatch = cart.find((c) => c.product.id === invItem.id);
       if (cartMatch) {
         const remainingQty = Math.max(0, (Number(invItem.quantity) || 0) - cartMatch.quantity);
@@ -273,21 +331,27 @@ export default function OndcBuyerScreen({
     setLiveInventory(updatedInventory);
     localStorage.setItem("kalakriti_inventory", JSON.stringify(updatedInventory));
 
-    // 3. सेलर के आर्डर टैब में नए आर्डर जोड़ें
+    // 3. सेलर के आर्डर टैब में नए आर्डर जोड़ें (Deduplicated)
     try {
       const currentOrders = JSON.parse(localStorage.getItem("kalakriti_orders") || "[]");
       const newArtisanOrders = cart.map((c) => ({
         orderId: orderResult.orderId,
+        productId: c.product.id,
         productTitle: getDisplayTitle(c.product) || "हस्तशिल्प उत्पाद",
         buyerCity: `${address.city} (${address.state})`,
         buyerPlatform: buyerPlatform,
         amount: (Number(c.product.suggested_price) || 199) * c.quantity,
         courier: selectedCourier,
-        status: "Pending",
+        status: "Pending" as const,
         orderDate: "अभी-अभी (Just now)",
+        quantity: c.quantity,
+        sellerName: c.product.artisan_name,
       }));
 
-      const mergedOrders = [...newArtisanOrders, ...currentOrders];
+      const existingFiltered = currentOrders.filter((eo: any) =>
+        !newArtisanOrders.some((no) => no.orderId === eo.orderId && (no.productId && eo.productId ? no.productId === eo.productId : no.productTitle === eo.productTitle))
+      );
+      const mergedOrders = [...newArtisanOrders, ...existingFiltered];
       localStorage.setItem("kalakriti_orders", JSON.stringify(mergedOrders));
     } catch (err) {
       console.warn("आर्डर सिंक करने में त्रुटि:", err);
@@ -300,7 +364,7 @@ export default function OndcBuyerScreen({
 
     // 5. स्टोरेज इवेंट ट्रिगर करें ताकि सेलर डैशबोर्ड तुरंत रीयल-टाइम अपडेट हो जाए
     window.dispatchEvent(new Event("storage"));
-    recordArtisanOrderSupport();
+    recordArtisanOrderSupport(orderResult?.orderId); // recordArtisanOrderSupport()
 
     // कार्ट खाली करें
     updateCartAndStorage([]);
@@ -310,7 +374,8 @@ export default function OndcBuyerScreen({
   const handleQuickAdd = (item: StoreItem, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     const localized = getLocalizedProductContent(item, currentLang);
-    const stock = Math.max(0, Number(item.quantity ?? 0));
+    const liveItem = liveInventory.find((i) => i.id === item.id) || item;
+    const stock = Math.max(0, Number(liveItem.quantity ?? 0));
     if (stock <= 0) return;
 
     const existing = cart.find((c) => c.product.id === item.id);
@@ -327,13 +392,13 @@ export default function OndcBuyerScreen({
     }
     updateCartAndStorage(updated);
     awardXp(50, "Added craft from Marketplace");
-    recordCraftDiscovery(item.categoryName || item.title_en || item.title_hi);
+    recordCraftDiscovery(item.id, item.categoryName || item.title_en || item.title_hi);
     setToastMessage(`✓ "${localized.title}" ${t("marketplace_added_toast")} (+50 XP)`);
     setTimeout(() => setToastMessage(null), 2500);
   };
 
   const openAddToCartModal = (item: StoreItem) => {
-    recordCraftDiscovery(item.categoryName || item.title_en || item.title_hi);
+    recordCraftDiscovery(item.id, item.categoryName || item.title_en || item.title_hi);
     const { availableToAdd } = getProductStockInfo(item.id);
     setSelectedProduct(item);
     setSelectedQty(availableToAdd > 0 ? 1 : 0);
@@ -375,7 +440,7 @@ export default function OndcBuyerScreen({
             <button
               type="button"
               onClick={onLogout}
-              className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 border border-white/25 flex items-center justify-center text-white active:scale-95 transition cursor-pointer flex-shrink-0"
+              className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 border border-white/25 flex items-center justify-center text-white active:scale-95 transition cursor-pointer flex-shrink-0 touch-press"
               title={t("marketplace_back_customer")}
               aria-label={t("marketplace_back_customer")}
             >
@@ -402,7 +467,7 @@ export default function OndcBuyerScreen({
             <button
               type="button"
               onClick={() => setShowDiscoveryModal(true)}
-              className="flex items-center gap-1 bg-amber-400/25 hover:bg-amber-400/35 text-amber-200 border border-amber-300/40 px-2.5 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition active:scale-95 shadow-xs"
+              className="flex items-center gap-1 bg-amber-400/25 hover:bg-amber-400/35 text-amber-200 border border-amber-300/40 px-2.5 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition active:scale-95 shadow-xs touch-press"
               title="View Explorer Quests & Badges"
             >
               <span>✨</span>
@@ -413,7 +478,7 @@ export default function OndcBuyerScreen({
             <button
               type="button"
               onClick={() => setShowDiscoveryModal(true)}
-              className="flex items-center gap-1 text-[10px] font-semibold text-white/90 hover:text-white bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded-full transition cursor-pointer active:scale-95"
+              className="flex items-center gap-1 text-[10px] font-semibold text-white/90 hover:text-white bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded-full transition cursor-pointer active:scale-95 touch-press"
             >
               <span>🏆</span>
               <span>{t("marketplace_craft_explorer_quests")} ({gamification.badges.length})</span>
@@ -423,7 +488,7 @@ export default function OndcBuyerScreen({
 
         {/* ── Toast Alert ── */}
         {toastMessage && (
-          <div className="absolute top-20 left-3 right-3 z-40 bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-xl flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="absolute top-20 left-3 right-3 z-40 bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-xl flex items-center gap-2 animate-slide-up">
             <span>🎉</span>
             <span className="truncate">{toastMessage}</span>
           </div>
@@ -435,7 +500,7 @@ export default function OndcBuyerScreen({
           style={{ scrollbarWidth: "none", paddingBottom: totalCartCount > 0 ? 140 : 80 }}
         >
           {/* Hero Banner */}
-          <section className="overflow-hidden rounded-2xl bg-gradient-to-r from-violet-900 to-purple-700 p-3.5 text-white shadow-md relative">
+          <section className="overflow-hidden rounded-2xl bg-gradient-to-r from-violet-900 to-purple-700 p-3.5 text-white shadow-md relative animate-fade-in">
             <div className="relative z-10">
               <p className="text-[9px] font-bold uppercase tracking-widest text-amber-300">
                 {t("marketplace_ondc_ready")} • Indian Crafts
@@ -452,7 +517,7 @@ export default function OndcBuyerScreen({
                   onClick={() => {
                     if (onEnterFair) onEnterFair();
                   }}
-                  className="rounded-xl bg-white px-3 py-1.5 font-bold text-violet-900 shadow-md hover:bg-amber-50 active:scale-95 transition flex items-center gap-1.5 cursor-pointer text-xs"
+                  className="rounded-xl bg-white px-3 py-1.5 font-bold text-violet-900 shadow-md hover:bg-amber-50 active:scale-95 transition flex items-center gap-1.5 cursor-pointer text-xs touch-press"
                 >
                   <span>🎪</span>
                   <span>{t("enter_fair_btn")}</span>
@@ -468,14 +533,14 @@ export default function OndcBuyerScreen({
               placeholder={t("search_placeholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full py-2.5 pl-9 pr-8 rounded-xl bg-white text-slate-800 text-xs outline-none shadow-xs border border-stone-200 font-medium"
+              className="w-full py-2.5 pl-9 pr-8 rounded-xl bg-white text-slate-800 text-xs outline-none shadow-xs border border-stone-200 font-medium transition-all duration-150 focus:border-violet-400 focus:ring-2 focus:ring-violet-200/50"
             />
             <span className="absolute left-3 top-2.5 text-slate-400 text-xs">🔍</span>
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-2.5 text-slate-400 text-xs font-bold cursor-pointer"
+                className="absolute right-2.5 top-2 w-5 h-5 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 active:scale-90 text-xs font-bold transition cursor-pointer touch-press"
               >
                 ✕
               </button>
@@ -529,7 +594,7 @@ export default function OndcBuyerScreen({
                     style={{ animationDelay: `${Math.min(idx * 40, 280)}ms` }}
                     onClick={() => {
                       setViewingDetailsProduct(item);
-                      recordCraftDiscovery(item.categoryName || item.title_en || item.title_hi);
+                      recordCraftDiscovery(item.id, item.categoryName || item.title_en || item.title_hi);
                     }}
                   >
                     <div className="aspect-square bg-stone-100 overflow-hidden relative group">
@@ -582,7 +647,7 @@ export default function OndcBuyerScreen({
                             if (isOutOfStock) return;
                             handleQuickAdd(item, e);
                           }}
-                          className={`rounded-lg px-2 py-1 text-[10px] font-bold shadow-xs transition active:scale-95 ${
+                          className={`rounded-lg px-2 py-1 text-[10px] font-bold shadow-xs transition touch-press ${
                             isOutOfStock
                               ? "bg-stone-300 text-stone-500 cursor-not-allowed"
                               : "bg-violet-700 hover:bg-violet-800 text-white cursor-pointer"
@@ -602,7 +667,7 @@ export default function OndcBuyerScreen({
 
         {/* ── Floating Bottom Cart Bar ── */}
         {totalCartCount > 0 && checkoutStage === "closed" && (
-          <div className="absolute bottom-12 left-4 right-4 z-40 animate-fade-in">
+          <div className="absolute bottom-12 left-4 right-4 z-40 animate-slide-up">
             <div
               onClick={() => setCheckoutStage("cart")}
               className="p-3 rounded-2xl text-white shadow-xl flex items-center justify-between cursor-pointer touch-press transition"
@@ -613,16 +678,31 @@ export default function OndcBuyerScreen({
                     : "linear-gradient(135deg, #0284C7 0%, #0369A1 100%)",
               }}
             >
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center text-sm font-bold">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center text-sm font-bold shadow-xs">
                   🛒
                 </div>
                 <div>
-                  <p className="text-xs font-bold">{t("cart_items_count").replace("{count}", String(totalCartCount))}</p>
-                  <p className="text-[10px] text-white/80">{t("cart_total_amount").replace("{amount}", String(cartQuote.totalPrice))}</p>
+                  <p className="text-xs font-bold flex items-center gap-1">
+                    <span
+                      key={totalCartCount}
+                      className="inline-block font-black text-amber-300 animate-badge-bump"
+                    >
+                      {totalCartCount}
+                    </span>
+                    <span>{t("cart_items_count").replace("{count}", "").trim()}</span>
+                  </p>
+                  <p className="text-[10px] text-white/85">
+                    {t("cart_total_amount").replace("{amount}", "").trim()}{" "}
+                    <AnimatedNumber
+                      value={cartQuote.totalPrice}
+                      prefix="₹"
+                      className="font-extrabold text-white"
+                    />
+                  </p>
                 </div>
               </div>
-              <div className="flex items-center gap-1 text-xs font-bold bg-white text-slate-900 px-3 py-1.5 rounded-xl shadow-xs">
+              <div className="flex items-center gap-1 text-xs font-bold bg-white text-slate-900 px-3 py-1.5 rounded-xl shadow-xs active:scale-95 transition touch-press">
                 <span>{t("checkout_action")}</span>
                 <span>➔</span>
               </div>
@@ -647,7 +727,7 @@ export default function OndcBuyerScreen({
               <button
                 type="button"
                 onClick={() => setViewingDetailsProduct(null)}
-                className="w-9 h-9 rounded-full flex items-center justify-center bg-white/20 hover:bg-white/30 border border-white/25 active:scale-95 transition cursor-pointer text-white"
+                className="w-9 h-9 rounded-full flex items-center justify-center bg-white/20 hover:bg-white/30 border border-white/25 active:scale-95 transition cursor-pointer text-white touch-press"
                 title={t("go_back")}
                 aria-label={t("go_back")}
               >
@@ -832,42 +912,54 @@ export default function OndcBuyerScreen({
                 </p>
               </div>
 
-              <button
-                type="button"
-                disabled={Number(viewingDetailsProduct.quantity || 0) <= 0}
-                onClick={() => {
-                  const itemToAdd = viewingDetailsProduct;
-                  setViewingDetailsProduct(null);
-                  openAddToCartModal(itemToAdd);
-                }}
-                className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold text-white shadow-md touch-press transition-all flex items-center justify-center gap-2 ${
-                  Number(viewingDetailsProduct.quantity || 0) <= 0
-                    ? "bg-slate-400 cursor-not-allowed"
-                    : "cursor-pointer"
-                }`}
-                style={{
-                  background:
-                    Number(viewingDetailsProduct.quantity || 0) <= 0
-                      ? "#94a3b8"
-                      : "linear-gradient(135deg, #7C3AED 0%, #5B21B6 100%)",
-                  fontFamily: "'Poppins', sans-serif",
-                }}
-              >
-                <span>🛒</span>
-                <span>
-                  {Number(viewingDetailsProduct.quantity || 0) <= 0
-                    ? t("out_of_stock")
-                    : t("add_to_cart")}
-                </span>
-              </button>
+              {(() => {
+                const liveDetail = liveInventory.find((i) => i.id === viewingDetailsProduct.id) || viewingDetailsProduct;
+                const isDetailOutOfStock = Math.max(0, Number(liveDetail.quantity ?? 0)) <= 0;
+                return (
+                  <button
+                    type="button"
+                    disabled={isDetailOutOfStock}
+                    onClick={() => {
+                      const itemToAdd = liveDetail;
+                      setViewingDetailsProduct(null);
+                      openAddToCartModal(itemToAdd);
+                    }}
+                    className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold text-white shadow-md touch-press transition-all flex items-center justify-center gap-2 ${
+                      isDetailOutOfStock
+                        ? "bg-slate-400 cursor-not-allowed"
+                        : "cursor-pointer"
+                    }`}
+                    style={{
+                      background:
+                        isDetailOutOfStock
+                          ? "#94a3b8"
+                          : "linear-gradient(135deg, #7C3AED 0%, #5B21B6 100%)",
+                      fontFamily: "'Poppins', sans-serif",
+                    }}
+                  >
+                    <span>🛒</span>
+                    <span>
+                      {isDetailOutOfStock
+                        ? t("out_of_stock")
+                        : t("add_to_cart")}
+                    </span>
+                  </button>
+                );
+              })()}
             </div>
           </div>
         )}
 
         {/* ── 🛒 Product Quick-View Modal (Quantity Selector - Stock Guard) ── */}
         {selectedProduct && (
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-end z-50 animate-fade-in">
-            <div className="bg-white w-full rounded-t-3xl p-5 space-y-3.5 max-h-[85%] overflow-y-auto animate-slide-up">
+          <div
+            onClick={() => setSelectedProduct(null)}
+            className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-end z-50 animate-fade-in cursor-pointer"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white w-full rounded-t-3xl p-5 space-y-3.5 max-h-[85%] overflow-y-auto animate-slide-up cursor-default"
+            >
               <div className="flex justify-between items-start border-b pb-3">
                 <div className="flex gap-3">
                   <img
@@ -886,7 +978,7 @@ export default function OndcBuyerScreen({
                 <button
                   type="button"
                   onClick={() => setSelectedProduct(null)}
-                  className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 font-bold flex items-center justify-center cursor-pointer"
+                  className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 font-bold flex items-center justify-center cursor-pointer touch-press"
                 >
                   ✕
                 </button>
@@ -908,16 +1000,19 @@ export default function OndcBuyerScreen({
                     type="button"
                     disabled={selectedQty <= 1}
                     onClick={() => setSelectedQty((q) => Math.max(1, q - 1))}
-                    className={`w-6 h-6 rounded-lg font-bold text-xs flex items-center justify-center transition ${
+                    className={`w-6 h-6 rounded-lg font-bold text-xs flex items-center justify-center transition touch-press ${
                       selectedQty <= 1
                         ? "text-slate-300 cursor-not-allowed"
-                        : "text-slate-700 hover:bg-slate-100 cursor-pointer active:scale-90"
+                        : "text-slate-700 hover:bg-slate-100 cursor-pointer"
                     }`}
                   >
                     -
                   </button>
 
-                  <span className="text-xs font-extrabold text-purple-900 w-5 text-center">
+                  <span
+                    key={selectedQty}
+                    className="text-xs font-extrabold text-purple-900 w-5 text-center inline-block animate-badge-bump"
+                  >
                     {selectedQty}
                   </span>
 
@@ -927,10 +1022,10 @@ export default function OndcBuyerScreen({
                     onClick={() =>
                       setSelectedQty((q) => Math.min(activeStockInfo.availableToAdd, q + 1))
                     }
-                    className={`w-6 h-6 rounded-lg font-bold text-xs flex items-center justify-center transition ${
+                    className={`w-6 h-6 rounded-lg font-bold text-xs flex items-center justify-center transition touch-press ${
                       selectedQty >= activeStockInfo.availableToAdd
                         ? "text-slate-300 cursor-not-allowed"
-                        : "text-purple-700 hover:bg-purple-100 cursor-pointer active:scale-90"
+                        : "text-purple-700 hover:bg-purple-100 cursor-pointer"
                     }`}
                   >
                     +
@@ -941,7 +1036,7 @@ export default function OndcBuyerScreen({
               <div className="flex justify-between items-center text-xs font-semibold text-slate-600 px-1">
                 <span>{t("total_price_label").replace("{qty}", String(selectedQty))}</span>
                 <span className="text-base font-extrabold text-slate-900">
-                  ₹{(Number(selectedProduct.suggested_price) || 199) * selectedQty}
+                  <AnimatedNumber value={(Number(selectedProduct.suggested_price) || 199) * selectedQty} prefix="₹" />
                 </span>
               </div>
 
@@ -976,8 +1071,13 @@ export default function OndcBuyerScreen({
 
         {/* ── STAGE 1: Cart Modal (Empty Cart Handled - Bug 4 Fixed) ── */}
         {checkoutStage === "cart" && (
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-end z-50 animate-fade-in">
-            <div className="bg-white w-full rounded-t-3xl p-5 space-y-3.5 max-h-[88%] overflow-y-auto animate-slide-up">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-end z-50 animate-fade-in cursor-pointer"
+            onClick={() => setCheckoutStage("closed")}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white w-full rounded-t-3xl p-5 space-y-3.5 max-h-[88%] overflow-y-auto animate-slide-up cursor-default"
+            >
               <div className="flex justify-between items-center border-b pb-2.5">
                 <div className="flex items-center gap-2">
                   <span className="text-lg">🛒 </span>
@@ -986,7 +1086,7 @@ export default function OndcBuyerScreen({
                 <button
                   type="button"
                   onClick={() => setCheckoutStage("closed")}
-                  className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 font-bold flex items-center justify-center cursor-pointer"
+                  className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 font-bold flex items-center justify-center cursor-pointer touch-press"
                 >
                   ✕
                 </button>
@@ -1005,7 +1105,7 @@ export default function OndcBuyerScreen({
                   <button
                     type="button"
                     onClick={() => setCheckoutStage("closed")}
-                    className="mt-3 px-6 py-2.5 rounded-xl text-xs font-bold text-white shadow-md cursor-pointer"
+                    className="mt-3 px-6 py-2.5 rounded-xl text-xs font-bold text-white shadow-md cursor-pointer touch-press"
                     style={{ background: "linear-gradient(135deg, #7C3AED 0%, #5B21B6 100%)" }}
                   >
                     {t("start_shopping")}
@@ -1017,7 +1117,8 @@ export default function OndcBuyerScreen({
                   <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
                     {cart.map((cartItem) => {
                       const itemTotal = Number(cartItem.product.suggested_price) * cartItem.quantity;
-                      const maxStock = Number(cartItem.product.quantity || 1);
+                      const liveItem = liveInventory.find((i) => i.id === cartItem.product.id);
+                      const maxStock = liveItem ? Math.max(0, Number(liveItem.quantity ?? 0)) : 0;
 
                       return (
                         <div
@@ -1032,9 +1133,19 @@ export default function OndcBuyerScreen({
                             />
                             <div>
                               <h4 className="text-xs font-bold text-slate-900 line-clamp-1">{getDisplayTitle(cartItem.product)}</h4>
-                              <p className="text-[11px] text-emerald-700 font-extrabold">
-                                ₹{cartItem.product.suggested_price} × {cartItem.quantity} = ₹{itemTotal}
+                              <p className="text-[11px] text-emerald-700 font-extrabold flex items-center gap-1">
+                                <span>₹{cartItem.product.suggested_price} × {cartItem.quantity} = </span>
+                                <AnimatedNumber value={itemTotal} prefix="₹" />
                               </p>
+                              {maxStock <= 0 ? (
+                                <span className="text-[10px] text-red-600 font-bold block">
+                                  {currentLang === "hi" ? "स्टॉक समाप्त" : "Out of Stock"}
+                                </span>
+                              ) : cartItem.quantity > maxStock ? (
+                                <span className="text-[10px] text-amber-600 font-bold block">
+                                  {currentLang === "hi" ? `केवल ${maxStock} उपलब्ध` : `Only ${maxStock} available`}
+                                </span>
+                              ) : null}
                             </div>
                           </div>
 
@@ -1043,19 +1154,22 @@ export default function OndcBuyerScreen({
                             <button
                               type="button"
                               onClick={() => handleDecreaseCartQty(cartItem.product.id)}
-                              className="w-5 h-5 text-xs font-bold text-slate-600 flex items-center justify-center cursor-pointer hover:bg-slate-100 rounded"
+                              className="w-5 h-5 text-xs font-bold text-slate-600 flex items-center justify-center cursor-pointer hover:bg-slate-100 rounded touch-press"
                             >
                               -
                             </button>
-                            <span className="text-xs font-bold text-slate-900 w-4 text-center">
+                            <span
+                              key={cartItem.quantity}
+                              className="text-xs font-bold text-slate-900 w-4 text-center inline-block animate-badge-bump"
+                            >
                               {cartItem.quantity}
                             </span>
                             <button
                               type="button"
-                              disabled={cartItem.quantity >= maxStock}
+                              disabled={cartItem.quantity >= maxStock || maxStock <= 0}
                               onClick={() => handleIncreaseCartQty(cartItem.product.id)}
-                              className={`w-5 h-5 text-xs font-bold flex items-center justify-center rounded ${
-                                cartItem.quantity >= maxStock
+                              className={`w-5 h-5 text-xs font-bold flex items-center justify-center rounded touch-press ${
+                                cartItem.quantity >= maxStock || maxStock <= 0
                                   ? "text-slate-300 cursor-not-allowed"
                                   : "text-slate-600 hover:bg-slate-100 cursor-pointer"
                               }`}
@@ -1072,7 +1186,7 @@ export default function OndcBuyerScreen({
                   <div className="p-3 bg-purple-50 rounded-2xl border border-purple-200 text-xs space-y-1.5">
                     <div className="flex justify-between text-slate-600">
                       <span>{t("items_total_value")}</span>
-                      <span>₹{cartQuote.itemTotal}</span>
+                      <span><AnimatedNumber value={cartQuote.itemTotal} prefix="₹" /></span>
                     </div>
                     <div className="flex justify-between text-slate-600">
                       <span>{t("courier_india_post")}</span>
@@ -1082,14 +1196,18 @@ export default function OndcBuyerScreen({
                     </div>
                     <div className="flex justify-between font-extrabold text-slate-900 text-sm border-t border-purple-200/80 pt-1">
                       <span>{t("total_payable")}</span>
-                      <span>₹{cartQuote.totalPrice}</span>
+                      <span><AnimatedNumber value={cartQuote.totalPrice} prefix="₹" /></span>
                     </div>
                   </div>
 
                   {/* Proceed to Address Button */}
                   <button
                     type="button"
-                    onClick={() => setCheckoutStage("address")}
+                    onClick={() => {
+                      if (validateCartItemsAgainstStock()) {
+                        setCheckoutStage("address");
+                      }
+                    }}
                     className="w-full py-3.5 rounded-xl font-bold text-white text-sm shadow-md touch-press transition flex items-center justify-center gap-2 cursor-pointer"
                     style={{
                       background:
@@ -1109,14 +1227,20 @@ export default function OndcBuyerScreen({
 
         {/* ── STAGE 2: Step 4 Delivery Address ── */}
         {checkoutStage === "address" && (
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-end z-50 animate-fade-in">
-            <div className="bg-white w-full rounded-t-3xl p-5 space-y-3.5 max-h-[90%] overflow-y-auto animate-slide-up">
+          <div
+            onClick={() => setCheckoutStage("closed")}
+            className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-end z-50 animate-fade-in cursor-pointer"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white w-full rounded-t-3xl p-5 space-y-3.5 max-h-[90%] overflow-y-auto animate-slide-up cursor-default"
+            >
               <div className="flex justify-between items-center border-b pb-2.5">
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setCheckoutStage("cart")}
-                    className="text-xs text-purple-700 font-bold hover:underline cursor-pointer"
+                    className="text-xs text-purple-700 font-bold hover:underline cursor-pointer touch-press"
                   >
                     {t("back_to_cart")}
                   </button>
@@ -1126,7 +1250,7 @@ export default function OndcBuyerScreen({
                 <button
                   type="button"
                   onClick={() => setCheckoutStage("closed")}
-                  className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 font-bold flex items-center justify-center cursor-pointer"
+                  className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 font-bold flex items-center justify-center cursor-pointer touch-press"
                 >
                   ✕
                 </button>
@@ -1213,7 +1337,7 @@ export default function OndcBuyerScreen({
                   <button
                     type="button"
                     onClick={() => setSelectedCourier("India Post (डाक घर)")}
-                    className="p-2 rounded-xl text-left border transition-all text-xs cursor-pointer"
+                    className="p-2 rounded-xl text-left border transition-all text-xs cursor-pointer touch-press"
                     style={{
                       borderColor: selectedCourier === "India Post (डाक घर)" ? "#5B21B6" : "#E2E8F0",
                       background: selectedCourier === "India Post (डाक घर)" ? "#F3E8FF" : "#FFFFFF",
@@ -1226,7 +1350,7 @@ export default function OndcBuyerScreen({
                   <button
                     type="button"
                     onClick={() => setSelectedCourier("Delhivery")}
-                    className="p-2 rounded-xl text-left border transition-all text-xs cursor-pointer"
+                    className="p-2 rounded-xl text-left border transition-all text-xs cursor-pointer touch-press"
                     style={{
                       borderColor: selectedCourier === "Delhivery" ? "#5B21B6" : "#E2E8F0",
                       background: selectedCourier === "Delhivery" ? "#F3E8FF" : "#FFFFFF",
@@ -1259,8 +1383,14 @@ export default function OndcBuyerScreen({
 
         {/* ── STAGE 3: Order Confirmation & Live Tracking ── */}
         {checkoutStage === "success" && confirmedOrderDetails && (
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-end z-50 animate-fade-in">
-            <div className="bg-white w-full rounded-t-3xl p-5 space-y-4 max-h-[90%] overflow-y-auto animate-slide-up text-center">
+          <div
+            onClick={() => setCheckoutStage("closed")}
+            className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-end z-50 animate-fade-in cursor-pointer"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white w-full rounded-t-3xl p-5 space-y-4 max-h-[90%] overflow-y-auto animate-slide-up text-center cursor-default"
+            >
               <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-3xl mx-auto shadow-xs animate-scale-in">
                 ✓
               </div>
@@ -1311,8 +1441,13 @@ export default function OndcBuyerScreen({
 
         {/* ── Artisan Discovery & Quests Modal (In-Shell) ── */}
         {showDiscoveryModal && (
-          <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3">
-            <div className="bg-white rounded-2xl max-w-sm w-full p-4 max-h-[85vh] overflow-y-auto shadow-2xl border border-stone-200 animate-in fade-in zoom-in-95 duration-200">
+          <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 animate-fade-in cursor-pointer"
+            onClick={() => setShowDiscoveryModal(false)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl max-w-sm w-full p-4 max-h-[85vh] overflow-y-auto shadow-2xl border border-stone-200 animate-modal-enter cursor-default"
+            >
               <div className="flex items-center justify-between pb-3 border-b border-stone-100">
                 <div className="flex items-center gap-1.5">
                   <span className="text-xl">🏆</span>
@@ -1328,113 +1463,182 @@ export default function OndcBuyerScreen({
                 <button
                   type="button"
                   onClick={() => setShowDiscoveryModal(false)}
-                  className="w-7 h-7 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center font-bold text-xs cursor-pointer"
+                  className="w-7 h-7 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center font-bold text-xs cursor-pointer touch-press"
                 >
                   ✕
                 </button>
               </div>
 
               {/* Level Progress */}
-              <div className="mt-3 p-3 rounded-xl bg-gradient-to-r from-violet-900 to-purple-800 text-white shadow-xs">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-[9px] uppercase font-bold tracking-wider text-purple-200">
-                      {t("gamification_level")} {gamification.level}
-                    </span>
-                    <h4 className="text-base font-black text-amber-300">
-                      {getLocalizedLevelTitle(gamification.level, t)}
-                    </h4>
+              {(() => {
+                const nextInfo = getNextLevelInfo(gamification.level, gamification.xp, t);
+                const xpToNextText = t("gamification_xp_to_next")
+                  .replace("{count}", String(nextInfo.xpRemaining))
+                  .replace("{level}", String(nextInfo.nextLevel));
+
+                return (
+                  <div className="mt-3 p-3.5 rounded-xl bg-gradient-to-r from-violet-900 via-purple-900 to-indigo-950 text-white shadow-md border border-purple-800/40">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-[9px] uppercase font-bold tracking-wider text-purple-200/90">
+                          {t("gamification_level")} {gamification.level}
+                        </span>
+                        <h4 className="text-base font-black text-amber-300 drop-shadow-xs">
+                          {getLocalizedLevelTitle(gamification.level, t)}
+                        </h4>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-base font-black text-amber-300 flex items-center justify-end gap-1">
+                          <AnimatedNumber value={gamification.xp} />
+                          <span className="text-xs font-bold text-white/80">{t("gamification_xp")}</span>
+                        </div>
+                        <span className="text-[9px] text-purple-200/90 font-medium">
+                          {xpToNextText}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="mt-2.5">
+                      <div className="w-full bg-white/20 rounded-full h-2 overflow-hidden">
+                        <div
+                          className="bg-gradient-to-r from-amber-400 to-amber-300 h-full rounded-full transition-all duration-500 shadow-xs"
+                          style={{
+                            width: `${nextInfo.progressPercent}%`,
+                          }}
+                        />
+                      </div>
+                      <div className="flex justify-between items-center text-[9px] text-white/75 mt-1.5 font-medium">
+                        <span>{nextInfo.progressPercent}%</span>
+                        <span className="truncate max-w-[70%] text-right">
+                          <span className="text-amber-200/90 font-semibold">{t("gamification_next_level_label")}</span> {nextInfo.nextLevelTitle} ({t("gamification_level")} {nextInfo.nextLevel})
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <span className="text-xl">✨</span>
-                </div>
-                <div className="mt-2">
-                  <div className="flex justify-between text-[10px] text-white/80 mb-1">
-                    <span>{gamification.xp} {t("gamification_xp")}</span>
-                    <span>{gamification.xpForNextLevel} {t("gamification_xp")} ({t("gamification_next_level")})</span>
-                  </div>
-                  <div className="w-full bg-white/20 rounded-full h-1.5 overflow-hidden">
-                    <div
-                      className="bg-amber-400 h-full rounded-full transition-all duration-500"
-                      style={{
-                        width: `${Math.min(100, Math.round((gamification.xp / gamification.xpForNextLevel) * 100))}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Discovery Quests */}
-              <div className="mt-3">
-                <h4 className="text-[10px] font-bold uppercase tracking-wider text-stone-500 mb-2">
-                  🎯 {t("gamification_quests")}
-                </h4>
+              <div className="mt-3.5">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1.5">
+                    <span>🎯</span>
+                    <span>{t("gamification_quests")}</span>
+                  </h4>
+                  <span className="text-[10px] font-bold text-violet-700 bg-violet-50 px-2 py-0.5 rounded-full border border-violet-100">
+                    {gamification.quests.filter((q) => q.completed).length} / {gamification.quests.length} {t("gamification_completed")}
+                  </span>
+                </div>
+
                 <div className="space-y-2">
                   {gamification.quests.map((q) => {
                     const localizedQ = getLocalizedQuest(q, t);
                     return (
                       <div
                         key={q.id}
-                        className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 ${
+                        className={`p-2.5 rounded-xl border transition flex items-center justify-between gap-2.5 ${
                           q.completed
-                            ? "bg-emerald-50 border-emerald-200 text-emerald-900"
-                            : "bg-stone-50 border-stone-200 text-stone-800"
+                            ? "bg-emerald-50/80 border-emerald-300/80 text-emerald-950 shadow-xs"
+                            : "bg-stone-50 border-stone-200/90 text-stone-800"
                         }`}
                       >
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-bold truncate">{localizedQ.title}</span>
+                            <span className="text-xs font-extrabold truncate">{localizedQ.title}</span>
                             {q.completed ? (
-                              <span className="text-[9px] bg-emerald-600 text-white font-bold px-1.5 py-0.5 rounded">
-                                ✓ {t("marketplace_done")}
+                              <span className="text-[9px] bg-emerald-600 text-white font-black px-1.5 py-0.5 rounded shadow-xs flex items-center gap-0.5">
+                                <span>✓</span>
+                                <span>{t("gamification_completed")}</span>
                               </span>
                             ) : (
-                              <span className="text-[9px] bg-purple-100 text-purple-700 font-bold px-1.5 py-0.5 rounded">
+                              <span className="text-[9px] bg-purple-100 text-purple-800 font-extrabold px-1.5 py-0.5 rounded border border-purple-200">
                                 +{q.xpReward} {t("gamification_xp")}
                               </span>
                             )}
                           </div>
                           <p className="text-[10px] text-stone-500 mt-0.5 leading-snug">{localizedQ.description}</p>
                         </div>
-                        <span className="text-[10px] font-extrabold text-stone-600 flex-shrink-0">
-                          {q.current} / {q.target}
-                        </span>
+                        <div className="flex-shrink-0 text-right">
+                          <span className={`text-[11px] font-black px-2 py-1 rounded-lg ${
+                            q.completed ? "bg-emerald-100/70 text-emerald-800" : "bg-stone-200/70 text-stone-700"
+                          }`}>
+                            {q.current} / {q.target}
+                          </span>
+                        </div>
                       </div>
                     );
                   })}
                 </div>
               </div>
 
-              {/* Badges Grid */}
-              <div className="mt-3">
-                <h4 className="text-[10px] font-bold uppercase tracking-wider text-stone-500 mb-2">
-                  🎖️ {t("gamification_badges")}
-                </h4>
-                <div className="grid grid-cols-2 gap-2">
-                  {Object.values(BADGE_DEFINITIONS).map((badge) => {
-                    const isUnlocked = gamification.badges.includes(badge.id);
-                    const localizedBadge = getLocalizedBadge(badge.id, t);
-                    return (
-                      <div
-                        key={badge.id}
-                        className={`p-2 rounded-xl border transition ${
-                          isUnlocked
-                            ? "bg-amber-50/70 border-amber-300/80 shadow-xs"
-                            : "bg-stone-50/60 border-stone-200 opacity-55 grayscale"
-                        }`}
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-lg">{badge.icon}</span>
-                          <span className="text-[11px] font-bold text-stone-900 leading-tight truncate">
-                            {localizedBadge.name}
-                          </span>
-                        </div>
-                        <p className="text-[9px] text-stone-500 mt-0.5 line-clamp-2 leading-tight">
-                          {localizedBadge.description}
-                        </p>
-                      </div>
-                    );
-                  })}
+              {/* Badges Section */}
+              <div className="mt-3.5">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1.5">
+                    <span>🎖️</span>
+                    <span>{t("gamification_earned_badges")}</span>
+                  </h4>
+                  <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                    {gamification.badges.length} / {Object.keys(BADGE_DEFINITIONS).length}
+                  </span>
                 </div>
+
+                {/* Earned Badges */}
+                <div className="grid grid-cols-2 gap-2">
+                  {Object.values(BADGE_DEFINITIONS)
+                    .filter((badge) => gamification.badges.includes(badge.id))
+                    .map((badge) => {
+                      const localizedBadge = getLocalizedBadge(badge.id, t);
+                      return (
+                        <div
+                          key={badge.id}
+                          className="p-2.5 rounded-xl border bg-amber-50/80 border-amber-300 shadow-xs flex flex-col justify-between"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xl drop-shadow-xs">{badge.icon}</span>
+                            <span className="text-[11px] font-black text-amber-950 leading-tight truncate">
+                              {localizedBadge.name}
+                            </span>
+                          </div>
+                          <p className="text-[9px] text-amber-800/80 mt-1 line-clamp-2 leading-tight">
+                            {localizedBadge.description}
+                          </p>
+                        </div>
+                      );
+                    })}
+                </div>
+
+                {/* Locked Badges */}
+                {Object.values(BADGE_DEFINITIONS).some((badge) => !gamification.badges.includes(badge.id)) && (
+                  <div className="mt-2.5">
+                    <h5 className="text-[9px] font-bold uppercase tracking-wider text-stone-400 mb-1.5 flex items-center gap-1">
+                      <span>🔒</span>
+                      <span>{t("gamification_locked")}</span>
+                    </h5>
+                    <div className="grid grid-cols-2 gap-2">
+                      {Object.values(BADGE_DEFINITIONS)
+                        .filter((badge) => !gamification.badges.includes(badge.id))
+                        .map((badge) => {
+                          const localizedBadge = getLocalizedBadge(badge.id, t);
+                          return (
+                            <div
+                              key={badge.id}
+                              className="p-2 rounded-xl border bg-stone-50 border-stone-200/70 opacity-60 flex flex-col justify-between"
+                            >
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-base grayscale opacity-60">🔒 {badge.icon}</span>
+                                <span className="text-[10px] font-bold text-stone-600 leading-tight truncate">
+                                  {localizedBadge.name}
+                                </span>
+                              </div>
+                              <p className="text-[8.5px] text-stone-400 mt-1 line-clamp-2 leading-tight">
+                                {localizedBadge.description}
+                              </p>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="mt-4 flex items-center gap-2">
@@ -1445,7 +1649,7 @@ export default function OndcBuyerScreen({
                       setShowDiscoveryModal(false);
                       onEnterFair();
                     }}
-                    className="flex-1 py-2.5 rounded-xl bg-violet-700 hover:bg-violet-800 text-white font-bold text-xs transition cursor-pointer"
+                    className="flex-1 py-2.5 rounded-xl bg-violet-700 hover:bg-violet-800 text-white font-bold text-xs transition cursor-pointer touch-press"
                   >
                     {t("enter_fair_btn")}
                   </button>
@@ -1453,7 +1657,7 @@ export default function OndcBuyerScreen({
                 <button
                   type="button"
                   onClick={() => setShowDiscoveryModal(false)}
-                  className={`py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs transition cursor-pointer ${
+                  className={`py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs transition cursor-pointer touch-press ${
                     onEnterFair ? "px-4" : "w-full"
                   }`}
                 >

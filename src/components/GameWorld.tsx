@@ -76,7 +76,7 @@ const mapInventoryToStallProducts = (inv: any[]): DatabaseProduct[] => {
       image_url: img,
       category: item.categoryName || "Handicraft",
       price,
-      stock: item.quantity || 5,
+      stock: item.quantity !== undefined && item.quantity !== null && !isNaN(Number(item.quantity)) ? Math.max(0, Number(item.quantity)) : 5,
       artisan: {
         id: `artisan-${index}`,
         name: assignedStall,
@@ -1699,11 +1699,78 @@ function ShopPanel({
   ) => void;
   dbProducts: DatabaseProduct[];
 }) {
-  const stallProducts = dbProducts.filter(
-    (product) =>
-      product.artisan?.name?.toLowerCase() === stallName.toLowerCase() ||
-      (product.category && stallName.toLowerCase().includes(product.category.toLowerCase()))
-  );
+  const normalizedStall = stallName.toLowerCase();
+
+  const getStallKeywords = (name: string) => {
+    if (name.includes("wood")) {
+      return [
+        "wood", "wooden", "woodwork", "puppet", "doll",
+        "kathputli", "लकड़ी", "लकड़ी", "कठपुतली"
+      ];
+    }
+
+    if (name.includes("pottery") || name.includes("pot")) {
+      return [
+        "pottery", "pot", "clay", "ceramic", "terracotta",
+        "mitti", "मिट्टी", "मृत्तिका"
+      ];
+    }
+
+    if (name.includes("weav") || name.includes("handloom")) {
+      return [
+        "weaving", "weave", "textile", "handloom", "saree",
+        "silk", "fabric", "cloth", "embroidery", "बुनाई", "कढ़ाई"
+      ];
+    }
+
+    if (name.includes("jewel")) {
+      return [
+        "jewellery", "jewelry", "jewel", "ornament",
+        "gold", "silver", "आभूषण"
+      ];
+    }
+
+    if (name.includes("metal")) {
+      return [
+        "metal", "metalwork", "brass", "copper", "iron",
+        "पीतल", "तांबा"
+      ];
+    }
+
+    if (name.includes("paint")) {
+      return [
+        "painting", "paint", "art", "madhubani", "pichwai", "चित्रकारी"
+      ];
+    }
+
+    return [];
+  };
+
+  const keywords = getStallKeywords(normalizedStall);
+
+  const stallProducts = dbProducts.filter((product) => {
+    if (product.artisan?.name?.toLowerCase() === stallName.toLowerCase()) {
+      return true;
+    }
+    if (product.category && stallName.toLowerCase().includes(product.category.toLowerCase())) {
+      return true;
+    }
+    const searchableText = [
+      product.title,
+      product.category,
+      product.description,
+      (product as any).material,
+      (product as any).craft,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return keywords.some((keyword) =>
+      searchableText.includes(keyword.toLowerCase())
+    );
+  });
+
   const displayProducts = stallProducts.length > 0 ? stallProducts : dbProducts.slice(0, 4);
 
   return (
@@ -1904,7 +1971,7 @@ function ShopPanel({
 
                     <button
                       onClick={() => {
-                        recordCraftDiscovery(product.title || product.category);
+                        recordCraftDiscovery(product.id, product.title || product.category);
                         onSelectProduct(product);
                       }}
                       style={{
@@ -1944,7 +2011,7 @@ function ShopPanel({
             fontSize: "15px",
           }}
         >
-          ← Back to Marketplace
+          ← Back to Fair
         </button>
       </div>
     </div>
@@ -1954,7 +2021,6 @@ function ShopPanel({
 /* =========================================================
    MAIN GAME
 ========================================================= */
-
 export default function GameWorld({
   onExit,
   inventory = [],
@@ -1995,6 +2061,15 @@ export default function GameWorld({
   const addToCart = (
     product: DatabaseProduct
   ) => {
+    const currentStock = product.stock !== undefined ? Number(product.stock) : 0;
+    if (currentStock <= 0) {
+      return;
+    }
+    const alreadyInCart = cart.filter((p) => p.id === product.id).length;
+    if (alreadyInCart >= currentStock) {
+      return;
+    }
+
     setCart((previousCart) => [
       ...previousCart,
       product,
@@ -2035,46 +2110,135 @@ export default function GameWorld({
   );
 
   /* =====================================================
-     SUPABASE PRODUCTS
+     CATALOGUE PRODUCTS
+
+     The artisan catalogue stores published products in
+     localStorage under "kalakriti_inventory".
+     Read that same source so products appear in the fair
+     immediately after catalogue publish.
+
+     Supabase remains a fallback/legacy source.
   ===================================================== */
 
   useEffect(() => {
-    const fetchProducts = async () => {
-      setLoadingProducts(true);
+    let mounted = true;
 
-      const {
-        data: productData,
-        error: productError,
-      } = await supabase
-        .from("products")
-        .select("*")
-        .order("created_at", {
-          ascending: false,
-        });
+    const normalize = (value: unknown) =>
+      String(value ?? "")
+        .toLowerCase()
+        .normalize("NFKD")
+        .replace(/[\\u0300-\\u036f]/g, "")
+        .trim();
 
-      if (productError) {
-        console.error(
-          "Products error:",
-          productError
+    const localInventoryToProducts = (): DatabaseProduct[] => {
+      try {
+        const raw = localStorage.getItem("kalakriti_inventory");
+        if (!raw) return [];
+
+        const items = JSON.parse(raw);
+        if (!Array.isArray(items)) return [];
+
+        return items.map((item: any, index: number) => ({
+          id: String(item.id ?? `catalog-${index}`),
+          artisan_id: String(
+            item.artisan_id ?? item.artisanId ?? "local-catalogue-artisan"
+          ),
+          title:
+            item.title_en ||
+            item.title ||
+            item.title_hi ||
+            item.title_local ||
+            "Handmade Product",
+          description:
+            item.quick_summary_en ||
+            item.quick_summary_hi ||
+            item.description ||
+            item.story_en ||
+            item.story_hi ||
+            "Handcrafted product from a Kalakriti artisan.",
+          image_url:
+            item.imageUrl ||
+            item.enhancedImageUrl ||
+            item.originalImageUrl ||
+            "",
+          category:
+            item.categoryName ||
+            item.category ||
+            item.craft ||
+            item.localizedContent?.craft ||
+            "",
+          price: Number(
+            item.suggested_price ?? item.suggestedPrice ?? item.price ?? 0
+          ),
+          stock: Math.max(0, Number(item.quantity ?? item.stock ?? 1)),
+          artisan: {
+            id: String(
+              item.artisan_id ?? item.artisanId ?? "local-catalogue-artisan"
+            ),
+            name:
+              item.artisan_name ||
+              item.artisanName ||
+              "Kalakriti Artisan",
+            bio:
+              item.quick_summary_en ||
+              item.quick_summary_hi ||
+              null,
+            location:
+              item.artisan_region || item.location || null,
+          },
+        }));
+      } catch (error) {
+        console.error("Catalogue localStorage error:", error);
+        return [];
+      }
+    };
+
+    const mergeProducts = (
+      localProducts: DatabaseProduct[],
+      remoteProducts: DatabaseProduct[]
+    ) => {
+      const merged = [...localProducts];
+
+      for (const remote of remoteProducts) {
+        const remoteTitle = normalize(remote.title);
+        const alreadyExists = merged.some(
+          (local) =>
+            local.id === remote.id ||
+            (remoteTitle && normalize(local.title) === remoteTitle)
         );
 
-        setLoadingProducts(false);
-
-        return;
+        if (!alreadyExists) merged.push(remote);
       }
 
-      console.log(
-        "Products from Supabase:",
-        productData
-      );
+      return merged;
+    };
+
+    const fetchProducts = async () => {
+      // LOCAL CATALOGUE IS THE PRIMARY SOURCE.
+      // This is what makes a newly published catalogue item appear
+      // without requiring the seller to add it again manually.
+      const localProducts = localInventoryToProducts();
+
+      if (mounted) {
+        setDbProducts(localProducts);
+        setLoadingProducts(false);
+      }
+
+      // Also load existing Supabase products.
+      const { data: productData, error: productError } = await supabase
+        .from("products")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (productError) {
+        console.error("Supabase products error:", productError);
+        return;
+      }
 
       const artisanIds = [
         ...new Set(
           (productData || [])
-            .map(
-              (product) =>
-                product.artisan_id
-            )
+            .map((product) => product.artisan_id)
             .filter(Boolean)
         ),
       ];
@@ -2082,52 +2246,73 @@ export default function GameWorld({
       let profiles: any[] = [];
 
       if (artisanIds.length > 0) {
-        const {
-          data: profileData,
-          error: profileError,
-        } = await supabase
+        const { data: profileData, error: profileError } = await supabase
           .from("profiles")
-          .select(
-            "id, name, bio, location"
-          )
+          .select("id, name, bio, location")
           .in("id", artisanIds);
 
         if (profileError) {
-          console.error(
-            "Profiles error:",
-            profileError
-          );
+          console.error("Profiles error:", profileError);
         } else {
           profiles = profileData || [];
         }
       }
 
-      const combinedProducts = (
-        productData || []
-      ).map((product) => ({
+      const remoteProducts = (productData || []).map((product) => ({
         ...product,
-
         artisan:
           profiles.find(
-            (profile) =>
-              profile.id ===
-              product.artisan_id
+            (profile) => profile.id === product.artisan_id
           ) || null,
-      }));
+      })) as DatabaseProduct[];
 
-      console.log(
-        "Products with artisans:",
-        combinedProducts
-      );
-
-      setDbProducts(
-        combinedProducts as DatabaseProduct[]
-      );
-
-      setLoadingProducts(false);
+      if (mounted) {
+        setDbProducts(
+          mergeProducts(localInventoryToProducts(), remoteProducts)
+        );
+      }
     };
 
     fetchProducts();
+
+    // App.tsx dispatches this event immediately after it writes the
+    // catalogue to localStorage. This handles SAME-TAB updates.
+    const handleCatalogueChanged = () => {
+      console.log("Catalogue updated — refreshing 3D fair");
+      const localProducts = localInventoryToProducts();
+      if (mounted) {
+        setDbProducts(localProducts);
+        setLoadingProducts(false);
+      }
+      fetchProducts();
+    };
+
+    window.addEventListener("storage", handleCatalogueChanged);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") fetchProducts();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    // Backup polling for updates made from another tab.
+    const refreshTimer = window.setInterval(() => {
+      if (document.visibilityState !== "visible" || !mounted) return;
+
+      const localProducts = localInventoryToProducts();
+      setDbProducts((current) => {
+        const currentKey = current.map((p) => p.id).join("|");
+        const localKey = localProducts.map((p) => p.id).join("|");
+        return currentKey === localKey ? current : localProducts;
+      });
+    }, 1500);
+
+    return () => {
+      mounted = false;
+      window.removeEventListener("storage", handleCatalogueChanged);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.clearInterval(refreshTimer);
+    };
   }, []);
 
   /* =====================================================
@@ -2144,11 +2329,12 @@ export default function GameWorld({
       }}
     >
       {/* =================================================
-          EXIT CRAFT FAIR BUTTON
+          BACK TO MARKETPLACE BUTTON
       ================================================= */}
 
       {onExit && (
         <button
+          type="button"
           onClick={onExit}
           style={{
             position: "fixed",
@@ -2170,6 +2356,7 @@ export default function GameWorld({
             backdropFilter: "blur(8px)",
           }}
           aria-label="Exit Craft Fair"
+          title="Back to Marketplace"
         >
           <span style={{ fontSize: "16px" }}>←</span>
           <span>Exit Craft Fair</span>
@@ -2528,9 +2715,15 @@ export default function GameWorld({
               ).toLocaleString("en-IN")}
             </h2>
 
+            {/* STOCK INFO */}
+            <div style={{ marginTop: "6px", fontSize: "13px", fontWeight: "600", color: (selectedProduct.stock ?? 0) <= 0 ? "#dc2626" : "#4b5563" }}>
+              {(selectedProduct.stock ?? 0) <= 0 ? "Out of Stock" : `In Stock: ${selectedProduct.stock}`}
+            </div>
+
             {/* ADD TO CART */}
 
             <button
+              disabled={(selectedProduct.stock ?? 0) <= 0}
               onClick={() =>
                 addToCart(
                   selectedProduct
@@ -2541,14 +2734,14 @@ export default function GameWorld({
                 padding: "14px",
                 border: "none",
                 borderRadius: "10px",
-                background: "#3155a5",
+                background: (selectedProduct.stock ?? 0) <= 0 ? "#9ca3af" : "#3155a5",
                 color: "white",
                 fontSize: "16px",
-                cursor: "pointer",
+                cursor: (selectedProduct.stock ?? 0) <= 0 ? "not-allowed" : "pointer",
                 marginTop: "10px",
               }}
             >
-              Add to Cart
+              {(selectedProduct.stock ?? 0) <= 0 ? "Out of Stock" : "Add to Cart"}
             </button>
           </div>
         </div>

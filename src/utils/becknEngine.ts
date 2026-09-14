@@ -251,28 +251,33 @@ export function executeBecknConfirm(
     console.warn("Could not save to buyer orders:", e);
   }
 
-  // 2. Transmit notification to Artisan's Storefront
-  cartItems.forEach((c) => {
-    try {
-      const existingArtisanOrders = JSON.parse(localStorage.getItem("kalakriti_orders") || "[]");
-      const artisanOrderEntry = {
-        orderId: confirmedOrder.orderId,
-        productTitle: c.product.title_hi || "हस्तशिल्प उत्पाद",
-        buyerCity: `${address.city} (${address.state})`,
-        buyerPlatform: "PhonePe Pincode",
-        amount: (c.product.suggested_price || 199) * c.quantity,
-        courier: "India Post (डाक घर)",
-        status: "Pending",
-        orderDate: "अभी-अभी (Just now)",
-      };
-      localStorage.setItem(
-        "kalakriti_orders",
-        JSON.stringify([artisanOrderEntry, ...existingArtisanOrders])
-      );
-    } catch (e) {
-      console.warn("Could not sync artisan order:", e);
-    }
-  });
+  // 2. Transmit notification to Artisan's Storefront (Deduplicated)
+  try {
+    const existingArtisanOrders = JSON.parse(localStorage.getItem("kalakriti_orders") || "[]");
+    const newArtisanOrders = cartItems.map((c) => ({
+      orderId: confirmedOrder.orderId,
+      productId: c.product.id,
+      productTitle: c.product.title_hi || "हस्तशिल्प उत्पाद",
+      buyerCity: `${address.city} (${address.state})`,
+      buyerPlatform: "PhonePe Pincode" as const,
+      amount: (Number(c.product.suggested_price) || 199) * c.quantity,
+      courier: "India Post (डाक घर)" as const,
+      status: "Pending" as const,
+      orderDate: "अभी-अभी (Just now)",
+      quantity: c.quantity,
+      sellerName: c.product.artisan_name,
+    }));
+
+    const existingFiltered = existingArtisanOrders.filter((eo: any) =>
+      !newArtisanOrders.some((no) => no.orderId === eo.orderId && (no.productId && eo.productId ? no.productId === eo.productId : no.productTitle === eo.productTitle))
+    );
+    localStorage.setItem(
+      "kalakriti_orders",
+      JSON.stringify([...newArtisanOrders, ...existingFiltered])
+    );
+  } catch (e) {
+    console.warn("Could not sync artisan order:", e);
+  }
 
   logBecknTransaction("on_confirm", { context, message: { order: confirmedOrder } });
   return confirmedOrder;

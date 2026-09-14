@@ -9,7 +9,7 @@ import ConfirmationModal from "./components/ConfirmationModal";
 import { LanguageDropdown } from "./components/LanguageDropdown";
 import { CartItem, ConfirmedOrder } from "./utils/becknEngine";
 import { areItemsDuplicate, extractCoreKeyword, getDisplayTitle, getLocalizedProductContent, KNOWN_CRAFT_LOCALIZATIONS, LocalizedContentMap } from "./utils/artisanAiService";
-import { MicPulseRing, AiScannerOverlay } from "./components/motion/MotionPrimitives";
+import { MicPulseRing, AiScannerOverlay, PageTransition, AnimatedNumber } from "./components/motion/MotionPrimitives";
 import { uploadToCloudinaryWithBgRemoval, getCloudinaryTransparentUrl } from "./utils/imageService";
 import GameWorld from "./components/GameWorld";
 import { TiltCard } from "./components/MouseParallax";
@@ -17,10 +17,12 @@ import {
   useBuyerGamification,
   awardXp,
   recordCraftDiscovery,
+  recordFairEntry,
   BADGE_DEFINITIONS,
   getLocalizedLevelTitle,
   getLocalizedBadge,
   getLocalizedQuest,
+  getNextLevelInfo,
 } from "./utils/gamificationService";
 
 // Craft Categories
@@ -120,12 +122,18 @@ const INITIAL_SEED: StoreItem[] = [
   },
 ];
 
+const parseSafeQty = (val: any, defaultVal = 1): number => {
+  if (val === undefined || val === null || val === "") return defaultVal;
+  const num = Number(val);
+  return isNaN(num) ? defaultVal : Math.max(0, num);
+};
+
 const deduplicateInventory = (items: StoreItem[]): StoreItem[] => {
   const merged: StoreItem[] = [];
   for (const item of items) {
     const existing = merged.find((m) => areItemsDuplicate(m, item));
     if (existing) {
-      existing.quantity = Math.max(1, (Number(existing.quantity) || 0) + (Number(item.quantity) || 1));
+      existing.quantity = Math.max(0, parseSafeQty(existing.quantity, 0) + parseSafeQty(item.quantity, 1));
       if (item.imageUrl && (!existing.imageUrl || existing.imageUrl.startsWith("blob:"))) {
         existing.imageUrl = item.imageUrl;
       }
@@ -144,7 +152,7 @@ const deduplicateInventory = (items: StoreItem[]): StoreItem[] => {
       } else if (item.id === "seed-2" && !item.localizedContent) {
         item.localizedContent = KNOWN_CRAFT_LOCALIZATIONS.kalash;
       }
-      merged.push({ ...item, quantity: Math.max(1, Number(item.quantity) || 1) });
+      merged.push({ ...item, quantity: parseSafeQty(item.quantity, 1) });
     }
   }
   return merged;
@@ -168,6 +176,14 @@ function Marketplace({ inventory, onEnterFair, onBack, onAddToCart }: Marketplac
 
   const handleQuickAdd = (item: StoreItem, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
+    const liveItem = inventory.find((i) => i.id === item.id) || item;
+    const available = Math.max(0, Number(liveItem.quantity ?? 0));
+    if (available <= 0) {
+      setToastMessage(currentLang === "hi" ? "यह उत्पाद आउट ऑफ स्टॉक है" : "This product is out of stock");
+      setTimeout(() => setToastMessage(null), 2500);
+      return;
+    }
+
     const localized = getLocalizedProductContent(item, currentLang);
     if (onAddToCart) {
       onAddToCart(item);
@@ -176,6 +192,11 @@ function Marketplace({ inventory, onEnterFair, onBack, onAddToCart }: Marketplac
         const saved = localStorage.getItem("kalakriti_cart");
         const currentCart: CartItem[] = saved ? JSON.parse(saved) : [];
         const existing = currentCart.find((c) => c.product.id === item.id);
+        if (existing && existing.quantity >= available) {
+          setToastMessage(currentLang === "hi" ? `अधिकतम उपलब्ध स्टॉक: ${available}` : `Maximum available stock: ${available}`);
+          setTimeout(() => setToastMessage(null), 2500);
+          return;
+        }
         let updated: CartItem[];
         if (existing) {
           updated = currentCart.map((c) =>
@@ -464,8 +485,14 @@ function Marketplace({ inventory, onEnterFair, onBack, onAddToCart }: Marketplac
 
         {/* ── GAMIFICATION QUESTS & BADGES MODAL (In-Shell) ── */}
         {showGamificationModal && (
-          <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3">
-            <div className="bg-white rounded-2xl max-w-sm w-full p-4 max-h-[85vh] overflow-y-auto shadow-2xl border border-stone-200 animate-in fade-in zoom-in-95 duration-200">
+          <div
+            className="absolute inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 animate-fade-in"
+            onClick={() => setShowGamificationModal(false)}
+          >
+            <div
+              className="bg-white rounded-2xl max-w-sm w-full p-4 max-h-[85vh] overflow-y-auto shadow-2xl border border-stone-200 animate-modal-enter"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="flex items-center justify-between pb-3 border-b border-stone-100">
                 <div className="flex items-center gap-1.5">
                   <span className="text-xl">🏆</span>
@@ -488,106 +515,175 @@ function Marketplace({ inventory, onEnterFair, onBack, onAddToCart }: Marketplac
               </div>
 
               {/* Level Progress */}
-              <div className="mt-3 p-3 rounded-xl bg-gradient-to-r from-violet-900 to-purple-800 text-white shadow-xs">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-[9px] uppercase font-bold tracking-wider text-purple-200">
-                      {t("gamification_level")} {gamification.level}
-                    </span>
-                    <h4 className="text-base font-black text-amber-300">
-                      {getLocalizedLevelTitle(gamification.level, t)}
-                    </h4>
+              {(() => {
+                const nextInfo = getNextLevelInfo(gamification.level, gamification.xp, t);
+                const xpToNextText = t("gamification_xp_to_next")
+                  .replace("{count}", String(nextInfo.xpRemaining))
+                  .replace("{level}", String(nextInfo.nextLevel));
+
+                return (
+                  <div className="mt-3 p-3.5 rounded-xl bg-gradient-to-r from-violet-900 via-purple-900 to-indigo-950 text-white shadow-md border border-purple-800/40">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-[9px] uppercase font-bold tracking-wider text-purple-200/90">
+                          {t("gamification_level")} {gamification.level}
+                        </span>
+                        <h4 className="text-base font-black text-amber-300 drop-shadow-xs">
+                          {getLocalizedLevelTitle(gamification.level, t)}
+                        </h4>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-base font-black text-amber-300 flex items-center justify-end gap-1">
+                          <AnimatedNumber value={gamification.xp} />
+                          <span className="text-xs font-bold text-white/80">{t("gamification_xp")}</span>
+                        </div>
+                        <span className="text-[9px] text-purple-200/90 font-medium">
+                          {xpToNextText}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="mt-2.5">
+                      <div className="w-full bg-white/20 rounded-full h-2 overflow-hidden">
+                        <div
+                          className="bg-gradient-to-r from-amber-400 to-amber-300 h-full rounded-full transition-all duration-500 shadow-xs"
+                          style={{
+                            width: `${nextInfo.progressPercent}%`,
+                          }}
+                        />
+                      </div>
+                      <div className="flex justify-between items-center text-[9px] text-white/75 mt-1.5 font-medium">
+                        <span>{nextInfo.progressPercent}%</span>
+                        <span className="truncate max-w-[70%] text-right">
+                          <span className="text-amber-200/90 font-semibold">{t("gamification_next_level_label")}</span> {nextInfo.nextLevelTitle} ({t("gamification_level")} {nextInfo.nextLevel})
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <span className="text-xl">✨</span>
-                </div>
-                <div className="mt-2">
-                  <div className="flex justify-between text-[10px] text-white/80 mb-1">
-                    <span>{gamification.xp} {t("gamification_xp")}</span>
-                    <span>{gamification.xpForNextLevel} {t("gamification_xp")} ({t("gamification_next_level")})</span>
-                  </div>
-                  <div className="w-full bg-white/20 rounded-full h-1.5 overflow-hidden">
-                    <div
-                      className="bg-amber-400 h-full rounded-full transition-all duration-500"
-                      style={{
-                        width: `${Math.min(100, Math.round((gamification.xp / gamification.xpForNextLevel) * 100))}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Discovery Quests */}
-              <div className="mt-3">
-                <h4 className="text-[10px] font-bold uppercase tracking-wider text-stone-500 mb-2">
-                  🎯 {t("gamification_quests")}
-                </h4>
+              <div className="mt-3.5">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1.5">
+                    <span>🎯</span>
+                    <span>{t("gamification_quests")}</span>
+                  </h4>
+                  <span className="text-[10px] font-bold text-violet-700 bg-violet-50 px-2 py-0.5 rounded-full border border-violet-100">
+                    {gamification.quests.filter((q) => q.completed).length} / {gamification.quests.length} {t("gamification_completed")}
+                  </span>
+                </div>
+
                 <div className="space-y-2">
                   {gamification.quests.map((q) => {
                     const localizedQ = getLocalizedQuest(q, t);
                     return (
                       <div
                         key={q.id}
-                        className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 ${
+                        className={`p-2.5 rounded-xl border transition flex items-center justify-between gap-2.5 ${
                           q.completed
-                            ? "bg-emerald-50 border-emerald-200 text-emerald-900"
-                            : "bg-stone-50 border-stone-200 text-stone-800"
+                            ? "bg-emerald-50/80 border-emerald-300/80 text-emerald-950 shadow-xs"
+                            : "bg-stone-50 border-stone-200/90 text-stone-800"
                         }`}
                       >
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-bold truncate">{localizedQ.title}</span>
+                            <span className="text-xs font-extrabold truncate">{localizedQ.title}</span>
                             {q.completed ? (
-                              <span className="text-[9px] bg-emerald-600 text-white font-bold px-1.5 py-0.5 rounded">
-                                ✓ {t("marketplace_done")}
+                              <span className="text-[9px] bg-emerald-600 text-white font-black px-1.5 py-0.5 rounded shadow-xs flex items-center gap-0.5">
+                                <span>✓</span>
+                                <span>{t("gamification_completed")}</span>
                               </span>
                             ) : (
-                              <span className="text-[9px] bg-purple-100 text-purple-700 font-bold px-1.5 py-0.5 rounded">
+                              <span className="text-[9px] bg-purple-100 text-purple-800 font-extrabold px-1.5 py-0.5 rounded border border-purple-200">
                                 +{q.xpReward} {t("gamification_xp")}
                               </span>
                             )}
                           </div>
                           <p className="text-[10px] text-stone-500 mt-0.5 leading-snug">{localizedQ.description}</p>
                         </div>
-                        <span className="text-[10px] font-extrabold text-stone-600 flex-shrink-0">
-                          {q.current} / {q.target}
-                        </span>
+                        <div className="flex-shrink-0 text-right">
+                          <span className={`text-[11px] font-black px-2 py-1 rounded-lg ${
+                            q.completed ? "bg-emerald-100/70 text-emerald-800" : "bg-stone-200/70 text-stone-700"
+                          }`}>
+                            {q.current} / {q.target}
+                          </span>
+                        </div>
                       </div>
                     );
                   })}
                 </div>
               </div>
 
-              {/* Badges Grid */}
-              <div className="mt-3">
-                <h4 className="text-[10px] font-bold uppercase tracking-wider text-stone-500 mb-2">
-                  🎖️ {t("gamification_badges")}
-                </h4>
-                <div className="grid grid-cols-2 gap-2">
-                  {Object.values(BADGE_DEFINITIONS).map((badge) => {
-                    const isUnlocked = gamification.badges.includes(badge.id);
-                    const localizedBadge = getLocalizedBadge(badge.id, t);
-                    return (
-                      <div
-                        key={badge.id}
-                        className={`p-2 rounded-xl border transition ${
-                          isUnlocked
-                            ? "bg-amber-50/70 border-amber-300/80 shadow-xs"
-                            : "bg-stone-50/60 border-stone-200 opacity-55 grayscale"
-                        }`}
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-lg">{badge.icon}</span>
-                          <span className="text-[11px] font-bold text-stone-900 leading-tight truncate">
-                            {localizedBadge.name}
-                          </span>
-                        </div>
-                        <p className="text-[9px] text-stone-500 mt-0.5 line-clamp-2 leading-tight">
-                          {localizedBadge.description}
-                        </p>
-                      </div>
-                    );
-                  })}
+              {/* Badges Section */}
+              <div className="mt-3.5">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1.5">
+                    <span>🎖️</span>
+                    <span>{t("gamification_earned_badges")}</span>
+                  </h4>
+                  <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                    {gamification.badges.length} / {Object.keys(BADGE_DEFINITIONS).length}
+                  </span>
                 </div>
+
+                {/* Earned Badges */}
+                <div className="grid grid-cols-2 gap-2">
+                  {Object.values(BADGE_DEFINITIONS)
+                    .filter((badge) => gamification.badges.includes(badge.id))
+                    .map((badge) => {
+                      const localizedBadge = getLocalizedBadge(badge.id, t);
+                      return (
+                        <div
+                          key={badge.id}
+                          className="p-2.5 rounded-xl border bg-amber-50/80 border-amber-300 shadow-xs flex flex-col justify-between"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xl drop-shadow-xs">{badge.icon}</span>
+                            <span className="text-[11px] font-black text-amber-950 leading-tight truncate">
+                              {localizedBadge.name}
+                            </span>
+                          </div>
+                          <p className="text-[9px] text-amber-800/80 mt-1 line-clamp-2 leading-tight">
+                            {localizedBadge.description}
+                          </p>
+                        </div>
+                      );
+                    })}
+                </div>
+
+                {/* Locked Badges */}
+                {Object.values(BADGE_DEFINITIONS).some((badge) => !gamification.badges.includes(badge.id)) && (
+                  <div className="mt-2.5">
+                    <h5 className="text-[9px] font-bold uppercase tracking-wider text-stone-400 mb-1.5 flex items-center gap-1">
+                      <span>🔒</span>
+                      <span>{t("gamification_locked")}</span>
+                    </h5>
+                    <div className="grid grid-cols-2 gap-2">
+                      {Object.values(BADGE_DEFINITIONS)
+                        .filter((badge) => !gamification.badges.includes(badge.id))
+                        .map((badge) => {
+                          const localizedBadge = getLocalizedBadge(badge.id, t);
+                          return (
+                            <div
+                              key={badge.id}
+                              className="p-2 rounded-xl border bg-stone-50 border-stone-200/70 opacity-60 flex flex-col justify-between"
+                            >
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-base grayscale opacity-60">🔒 {badge.icon}</span>
+                                <span className="text-[10px] font-bold text-stone-600 leading-tight truncate">
+                                  {localizedBadge.name}
+                                </span>
+                              </div>
+                              <p className="text-[8.5px] text-stone-400 mt-1 line-clamp-2 leading-tight">
+                                {localizedBadge.description}
+                              </p>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="mt-4 flex items-center gap-2">
@@ -794,7 +890,13 @@ export default function App() {
 
   // ── बायर द्वारा आर्डर करने पर सेलर डैशबोर्ड में लाइव सिंक ──
   const handleOrderConfirmedFromBuyer = (confirmedOrder: ConfirmedOrder, cartItems: CartItem[]) => {
-    const updatedInventory = inventory.map((invItem) => {
+    let freshInventory = inventory;
+    try {
+      const saved = localStorage.getItem("kalakriti_inventory");
+      if (saved) freshInventory = JSON.parse(saved);
+    } catch {}
+
+    const updatedInventory = freshInventory.map((invItem) => {
       const cartMatch = cartItems.find((c) => c.product.id === invItem.id);
       if (cartMatch) {
         const remainingQty = Math.max(0, (Number(invItem.quantity) || 0) - cartMatch.quantity);
@@ -806,8 +908,17 @@ export default function App() {
     setInventory(updatedInventory);
     localStorage.setItem("kalakriti_inventory", JSON.stringify(updatedInventory));
 
+    const currentOrders: OrderItem[] = (() => {
+      try {
+        return JSON.parse(localStorage.getItem("kalakriti_orders") || "[]");
+      } catch {
+        return orders;
+      }
+    })();
+
     const newArtisanOrders: OrderItem[] = cartItems.map((c) => ({
       orderId: confirmedOrder.orderId,
+      productId: c.product.id,
       productTitle: c.product.title_hi || "हस्तशिल्प उत्पाद",
       buyerCity: `${confirmedOrder.deliveryAddress.city} (${confirmedOrder.deliveryAddress.state})`,
       buyerPlatform: "PhonePe Pincode",
@@ -815,9 +926,14 @@ export default function App() {
       courier: "India Post (डाक घर)",
       status: "Pending",
       orderDate: "अभी-अभी (Just now)",
+      quantity: c.quantity,
+      sellerName: c.product.artisan_name,
     }));
 
-    const updatedOrders = [...newArtisanOrders, ...orders];
+    const existingFiltered = currentOrders.filter((eo: any) =>
+      !newArtisanOrders.some((no) => no.orderId === eo.orderId && (no.productId && eo.productId ? no.productId === eo.productId : no.productTitle === eo.productTitle))
+    );
+    const updatedOrders = [...newArtisanOrders, ...existingFiltered];
     setOrders(updatedOrders);
     localStorage.setItem("kalakriti_orders", JSON.stringify(updatedOrders));
     window.dispatchEvent(new Event("storage"));
@@ -886,7 +1002,7 @@ export default function App() {
         idx === existingIndex
           ? {
               ...item,
-              quantity: (Number(item.quantity) || 0) + 1,
+              quantity: (Number(item.quantity) || 0) + (Number((catalogItem as any).quantity) || 1),
               imageUrl: catalogItem.imageUrl || item.imageUrl,
               imageSignature: catalogItem.imageSignature || item.imageSignature,
               localizedContent: {
@@ -900,7 +1016,7 @@ export default function App() {
       const newEntry: StoreItem = {
         id: Date.now().toString(),
         ...catalogItem,
-        quantity: 1,
+        quantity: (catalogItem as any).quantity !== undefined ? Math.max(0, Number((catalogItem as any).quantity) || 0) : 1,
         publishedAt: "आज",
         categoryName: CATEGORIES[selectedCategory].en,
         localizedContent: catalogItem.localizedContent || {},
@@ -1575,11 +1691,14 @@ Output ONLY valid JSON matching this schema:
   };
 
   // ── ROUTING ──
-  // 0. 3D Fair
+  // 0. 3D Craft Fair
   if (showGame) {
     return (
       <GameWorld
-        onExit={() => setShowGame(false)}
+        onExit={() => {
+          setShowGame(false);
+          setScreen("buyer");
+        }}
         inventory={inventory}
         onAddToCart={(product: any) => {
           try {
@@ -1591,13 +1710,22 @@ Output ONLY valid JSON matching this schema:
               title_hi: product.title,
               title_local: product.title,
               suggested_price: Number(product.price) || 499,
-              quantity: 5,
+              quantity: product.stock !== undefined ? Number(product.stock) : 5,
               imageUrl: product.image_url,
               artisan_name: product.artisan?.name || "Indian Artisan",
               artisan_region: product.artisan?.location || "India",
             };
+            const availableStock = Math.max(0, Number(matchedInv.quantity ?? 0));
+            if (availableStock <= 0) {
+              console.warn("Item is out of stock:", matchedInv.id);
+              return;
+            }
             const idx = currentCart.findIndex((c) => c.product.id === matchedInv.id);
             if (idx >= 0) {
+              if (currentCart[idx].quantity >= availableStock) {
+                console.warn("Cart quantity cannot exceed available stock");
+                return;
+              }
               currentCart[idx].quantity += 1;
             } else {
               currentCart.push({ product: matchedInv, quantity: 1 });
@@ -1618,80 +1746,105 @@ Output ONLY valid JSON matching this schema:
   // 1. Customer side — Unified Buyer Marketplace
   if (screen === "buyer") {
     return (
-      <CustomerSide
-        inventory={inventory}
-        onOrderConfirmed={handleOrderConfirmedFromBuyer}
-        onLogout={handleBuyerLogout}
-        onEnterFair={() => setShowGame(true)}
-      />
+      <PageTransition pageKey="buyer">
+        <CustomerSide
+          inventory={inventory}
+          onOrderConfirmed={handleOrderConfirmedFromBuyer}
+          onLogout={handleBuyerLogout}
+          onEnterFair={() => {
+            recordFairEntry();
+            setShowGame(true);
+          }}
+        />
+      </PageTransition>
     );
   }
 
   // 2. Marketplace — opens the existing 3D fair only after the user clicks Enter Craft Fair
   if (screen === "marketplace") {
     return (
-      <Marketplace
-        inventory={inventory}
-        onEnterFair={() => setShowGame(true)}
-        onBack={() => setScreen("buyer")}
-        onAddToCart={(item: StoreItem) => {
-          try {
-            const saved = localStorage.getItem("kalakriti_cart");
-            const currentCart: CartItem[] = saved ? JSON.parse(saved) : [];
-            const idx = currentCart.findIndex((c) => c.product.id === item.id);
-            if (idx >= 0) {
-              currentCart[idx].quantity += 1;
-            } else {
-              currentCart.push({ product: item, quantity: 1 });
+      <PageTransition pageKey="marketplace">
+        <Marketplace
+          inventory={inventory}
+          onEnterFair={() => {
+            recordFairEntry();
+            setShowGame(true);
+          }}
+          onBack={() => setScreen("buyer")}
+          onAddToCart={(item: StoreItem) => {
+            try {
+              const saved = localStorage.getItem("kalakriti_cart");
+              const currentCart: CartItem[] = saved ? JSON.parse(saved) : [];
+              const matchedInv = inventory.find((i) => i.id === item.id) || item;
+              const availableStock = Math.max(0, Number(matchedInv.quantity ?? 0));
+              if (availableStock <= 0) {
+                console.warn("Item is out of stock:", matchedInv.id);
+                return;
+              }
+              const idx = currentCart.findIndex((c) => c.product.id === item.id);
+              if (idx >= 0) {
+                if (currentCart[idx].quantity >= availableStock) {
+                  console.warn("Cart quantity cannot exceed available stock");
+                  return;
+                }
+                currentCart[idx].quantity += 1;
+              } else {
+                currentCart.push({ product: item, quantity: 1 });
+              }
+              localStorage.setItem("kalakriti_cart", JSON.stringify(currentCart));
+              window.dispatchEvent(new Event("storage"));
+            } catch (e) {
+              console.warn("Marketplace cart sync error:", e);
             }
-            localStorage.setItem("kalakriti_cart", JSON.stringify(currentCart));
-            window.dispatchEvent(new Event("storage"));
-          } catch (e) {
-            console.warn("Marketplace cart sync error:", e);
-          }
-        }}
-      />
+          }}
+        />
+      </PageTransition>
     );
   }
 
   // 3. Listing Preview
   if (screen === "preview" && selectedPreviewItem) {
     return (
-      <CatalogPreview
-        data={selectedPreviewItem}
-        onBack={() => setScreen("capture")}
-        onCheckout={handlePublishToOndc}
-      />
+      <PageTransition pageKey="preview">
+        <CatalogPreview
+          data={selectedPreviewItem}
+          onBack={() => setScreen("capture")}
+          onCheckout={handlePublishToOndc}
+        />
+      </PageTransition>
     );
   }
 
   // 3. Artisan Dashboard Screen (Two-Way Synced)
   if (screen === "dashboard") {
     return (
-      <ArtisanDashboard
-        inventory={inventory}
-        orders={orders}
-        onAddNewProduct={() => setScreen("capture")}
-        onBack={() => setScreen("capture")}
-        onPreviewProduct={(product) => {
-          setSelectedPreviewItem(product);
-          setScreen("preview");
-        }}
-        onIncreaseQty={handleIncreaseQty}
-        onDecreaseQty={handleDecreaseQty}
-        onRemoveProduct={handleRemoveProduct}
-        onDispatchOrder={handleDispatchOrder}
-        onLogout={handleSellerLogout}
-      />
+      <PageTransition pageKey="dashboard">
+        <ArtisanDashboard
+          inventory={inventory}
+          orders={orders}
+          onAddNewProduct={() => setScreen("capture")}
+          onBack={() => setScreen("capture")}
+          onPreviewProduct={(product) => {
+            setSelectedPreviewItem(product);
+            setScreen("preview");
+          }}
+          onIncreaseQty={handleIncreaseQty}
+          onDecreaseQty={handleDecreaseQty}
+          onRemoveProduct={handleRemoveProduct}
+          onDispatchOrder={handleDispatchOrder}
+          onLogout={handleSellerLogout}
+        />
+      </PageTransition>
     );
   }
 
   // 4. Capture Screen
   return (
-    <div
-      className="size-full flex items-center justify-center"
-      style={{ background: "#EDE0D4", fontFamily: "'Poppins', sans-serif" }}
-    >
+    <PageTransition pageKey="capture">
+      <div
+        className="size-full flex items-center justify-center"
+        style={{ background: "#EDE0D4", fontFamily: "'Poppins', sans-serif" }}
+      >
       <div
         className="relative flex flex-col overflow-hidden"
         style={{
@@ -2161,5 +2314,6 @@ Output ONLY valid JSON matching this schema:
         />
       </div>
     </div>
+    </PageTransition>
   );
 }

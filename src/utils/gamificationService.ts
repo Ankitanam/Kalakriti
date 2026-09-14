@@ -30,11 +30,13 @@ export interface GamificationState {
   xpForNextLevel: number;
   badges: string[]; // Badge IDs
   discoveredCrafts: string[]; // Categories/items explored
+  discoveredProductIds?: string[]; // Unique product IDs viewed
   visitedStalls: string[]; // Stalls visited in 3D Fair
   supportedArtisans: number; // Orders placed
   streakDays: number;
   lastActiveDate: string;
   quests: DiscoveryQuest[];
+  awardedEvents?: string[]; // Persistent idempotent event keys
 }
 
 const STORAGE_KEY = "kalakriti_buyer_gamification";
@@ -110,6 +112,7 @@ const INITIAL_QUESTS: DiscoveryQuest[] = [
 ];
 
 export function getLevelTitle(level: number): string {
+  if (level >= 6) return "Heritage Grandmaster";
   if (level >= 5) return "Master Connoisseur";
   if (level >= 4) return "Heritage Patron";
   if (level >= 3) return "Craft Collector";
@@ -119,6 +122,10 @@ export function getLevelTitle(level: number): string {
 
 export function getLocalizedLevelTitle(level: number, t?: (key: any) => string): string {
   if (t) {
+    if (level >= 6) {
+      const grandmaster = t("level_heritage_grandmaster" as any);
+      return grandmaster && grandmaster !== "level_heritage_grandmaster" ? grandmaster : t("level_master_connoisseur");
+    }
     if (level >= 5) return t("level_master_connoisseur");
     if (level >= 4) return t("level_heritage_patron");
     if (level >= 3) return t("level_craft_collector");
@@ -165,13 +172,41 @@ export function getLocalizedQuest(quest: DiscoveryQuest, t?: (key: any) => strin
   };
 }
 
-function calculateLevel(xp: number): { level: number; xpForNextLevel: number } {
-  // Level 1: 0-99 XP, Level 2: 100-249 XP, Level 3: 250-499 XP, Level 4: 500-999 XP, Level 5: 1000+ XP
-  if (xp >= 1000) return { level: 5, xpForNextLevel: 2000 };
-  if (xp >= 500) return { level: 4, xpForNextLevel: 1000 };
-  if (xp >= 250) return { level: 3, xpForNextLevel: 500 };
-  if (xp >= 100) return { level: 2, xpForNextLevel: 250 };
-  return { level: 1, xpForNextLevel: 100 };
+export function calculateLevel(xp: number): { level: number; xpForNextLevel: number; minXpForCurrentLevel: number } {
+  // Level 1: 0-99 XP, Level 2: 100-249 XP, Level 3: 250-499 XP, Level 4: 500-999 XP, Level 5: 1000-1999 XP, Level 6+: 2000+ XP
+  if (xp >= 2000) return { level: 6, xpForNextLevel: 3500, minXpForCurrentLevel: 2000 };
+  if (xp >= 1000) return { level: 5, xpForNextLevel: 2000, minXpForCurrentLevel: 1000 };
+  if (xp >= 500) return { level: 4, xpForNextLevel: 1000, minXpForCurrentLevel: 500 };
+  if (xp >= 250) return { level: 3, xpForNextLevel: 500, minXpForCurrentLevel: 250 };
+  if (xp >= 100) return { level: 2, xpForNextLevel: 250, minXpForCurrentLevel: 100 };
+  return { level: 1, xpForNextLevel: 100, minXpForCurrentLevel: 0 };
+}
+
+export interface NextLevelInfo {
+  nextLevel: number;
+  nextLevelXp: number;
+  xpRemaining: number;
+  nextLevelTitle: string;
+  progressPercent: number;
+}
+
+export function getNextLevelInfo(level: number, xp: number, t?: (key: any) => string): NextLevelInfo {
+  const currentThresholds = calculateLevel(xp);
+  const nextLevel = currentThresholds.level + 1;
+  const nextLevelXp = currentThresholds.xpForNextLevel;
+  const xpRemaining = Math.max(0, nextLevelXp - xp);
+  const minXp = currentThresholds.minXpForCurrentLevel;
+  const range = Math.max(1, nextLevelXp - minXp);
+  const progressPercent = Math.min(100, Math.max(0, Math.round(((xp - minXp) / range) * 100)));
+  const nextLevelTitle = getLocalizedLevelTitle(nextLevel, t);
+
+  return {
+    nextLevel,
+    nextLevelXp,
+    xpRemaining,
+    nextLevelTitle,
+    progressPercent,
+  };
 }
 
 export function getGamificationState(): GamificationState {
@@ -186,6 +221,8 @@ export function getGamificationState(): GamificationState {
         levelTitle: getLevelTitle(level),
         xpForNextLevel,
         quests: parsed.quests && parsed.quests.length > 0 ? parsed.quests : INITIAL_QUESTS,
+        discoveredProductIds: Array.isArray(parsed.discoveredProductIds) ? parsed.discoveredProductIds : [],
+        awardedEvents: Array.isArray(parsed.awardedEvents) ? parsed.awardedEvents : ["welcome_bonus"],
       };
     }
   } catch (e) {
@@ -199,11 +236,13 @@ export function getGamificationState(): GamificationState {
     xpForNextLevel: 100,
     badges: ["craft_explorer"],
     discoveredCrafts: [],
+    discoveredProductIds: [],
     visitedStalls: [],
     supportedArtisans: 0,
     streakDays: 1,
     lastActiveDate: new Date().toISOString().split("T")[0],
     quests: INITIAL_QUESTS,
+    awardedEvents: ["welcome_bonus"],
   };
 }
 
@@ -214,6 +253,41 @@ export function saveGamificationState(state: GamificationState): void {
   } catch (e) {
     console.warn("[GAMIFICATION] Failed to save state to localStorage:", e);
   }
+}
+
+export function awardIdempotentXp(
+  eventKey: string,
+  amount: number,
+  reason?: string
+): { state: GamificationState; leveledUp: boolean; xpEarned: number } {
+  if (!eventKey) return awardXp(amount, reason);
+  const current = getGamificationState();
+  const awarded = current.awardedEvents || [];
+
+  if (awarded.includes(eventKey)) {
+    return { state: current, leveledUp: false, xpEarned: 0 };
+  }
+
+  const oldLevel = current.level;
+  const newXp = (current.xp || 0) + amount;
+  const { level: newLevel, xpForNextLevel } = calculateLevel(newXp);
+  const leveledUp = newLevel > oldLevel;
+
+  const updated: GamificationState = {
+    ...current,
+    xp: newXp,
+    level: newLevel,
+    levelTitle: getLevelTitle(newLevel),
+    xpForNextLevel,
+    awardedEvents: [...awarded, eventKey],
+  };
+
+  if (reason) {
+    console.log(`[GAMIFICATION] +${amount} XP (${reason}). Total: ${newXp} XP (Level ${newLevel}) [Event: ${eventKey}]`);
+  }
+
+  saveGamificationState(updated);
+  return { state: updated, leveledUp, xpEarned: amount };
 }
 
 export function awardXp(
@@ -242,33 +316,58 @@ export function awardXp(
   return { state: updated, leveledUp, xpEarned: amount };
 }
 
-export function recordCraftDiscovery(craftName: string): GamificationState {
-  if (!craftName) return getGamificationState();
+export function recordCraftDiscovery(
+  craftIdOrName: string,
+  craftCategory?: string
+): GamificationState {
+  if (!craftIdOrName) return getGamificationState();
   const current = getGamificationState();
-  const cleanName = craftName.trim().toLowerCase();
 
-  if (current.discoveredCrafts.includes(cleanName)) {
+  const rawName = craftCategory || craftIdOrName;
+  const cleanName = rawName.trim().toLowerCase();
+  const productId = craftCategory ? craftIdOrName.trim() : "";
+  const effectiveId = productId || cleanName;
+
+  const awarded = current.awardedEvents || [];
+  const discoveredProducts = current.discoveredProductIds || [];
+
+  // Check if duplicate product or craft discovery
+  const alreadyDiscoveredProduct = productId ? discoveredProducts.includes(productId) : false;
+  if (current.discoveredCrafts.includes(cleanName) && (alreadyDiscoveredProduct || !productId)) {
     return current;
   }
 
-  const updatedDiscovered = [...current.discoveredCrafts, cleanName];
+  const updatedDiscoveredCrafts = current.discoveredCrafts.includes(cleanName)
+    ? current.discoveredCrafts
+    : [...current.discoveredCrafts, cleanName];
+
+  const updatedProductIds = (productId && !discoveredProducts.includes(productId))
+    ? [...discoveredProducts, productId]
+    : discoveredProducts;
+
   const newBadges = [...current.badges];
+  if (!newBadges.includes("craft_explorer")) {
+    newBadges.push("craft_explorer");
+  }
 
   // Check specific craft badges
-  if (/pottery|मिट्टी|कलश|हांडी|clay/i.test(craftName) && !newBadges.includes("pottery_patron")) {
+  if (/pottery|मिट्टी|कलश|हांडी|clay/i.test(cleanName) && !newBadges.includes("pottery_patron")) {
     newBadges.push("pottery_patron");
   }
-  if (/weaving|banarasi|handloom|बुनाई|silk|saree/i.test(craftName) && !newBadges.includes("weaves_admirer")) {
+  if (/weaving|banarasi|handloom|बुनाई|silk|saree/i.test(cleanName) && !newBadges.includes("weaves_admirer")) {
     newBadges.push("weaves_admirer");
   }
-  if (/painting|madhubani|warli|चित्रकारी|चित्र/i.test(craftName) && !newBadges.includes("folk_art_lover")) {
+  if (/painting|madhubani|warli|चित्रकारी|चित्र/i.test(cleanName) && !newBadges.includes("folk_art_lover")) {
     newBadges.push("folk_art_lover");
   }
 
-  // Update quests
+  // Update quests: count unique discoveries
+  const uniqueCount = Math.max(updatedDiscoveredCrafts.length, updatedProductIds.length);
+  const questCompleted = uniqueCount >= 3;
+
   const updatedQuests = current.quests.map((q) => {
     if (q.id === "discover_crafts") {
-      const nextCount = Math.min(q.target, q.current + 1);
+      const nextCount = Math.min(q.target, uniqueCount);
       return {
         ...q,
         current: nextCount,
@@ -278,7 +377,23 @@ export function recordCraftDiscovery(craftName: string): GamificationState {
     return q;
   });
 
-  const bonusXp = 25; // 25 XP for each new craft discovered
+  // Calculate XP idempotently
+  let bonusXp = 0;
+  const newAwarded = [...awarded];
+
+  // 1. Discovery XP (+25 XP per unique craft/product)
+  const discoveryEventKey = `craft_discovered:${effectiveId}`;
+  if (!newAwarded.includes(discoveryEventKey)) {
+    newAwarded.push(discoveryEventKey);
+    bonusXp += 25;
+  }
+
+  // 2. Quest completion reward (+75 XP once)
+  if (questCompleted && !newAwarded.includes("quest:discover_crafts")) {
+    newAwarded.push("quest:discover_crafts");
+    bonusXp += 75;
+  }
+
   const newXp = current.xp + bonusXp;
   const { level, xpForNextLevel } = calculateLevel(newXp);
 
@@ -288,9 +403,11 @@ export function recordCraftDiscovery(craftName: string): GamificationState {
     level,
     levelTitle: getLevelTitle(level),
     xpForNextLevel,
-    discoveredCrafts: updatedDiscovered,
+    discoveredCrafts: updatedDiscoveredCrafts,
+    discoveredProductIds: updatedProductIds,
     badges: newBadges,
     quests: updatedQuests,
+    awardedEvents: newAwarded,
   };
 
   saveGamificationState(updated);
@@ -301,17 +418,18 @@ export function recordStallVisit(stallName: string): GamificationState {
   if (!stallName) return getGamificationState();
   const current = getGamificationState();
   const cleanStall = stallName.trim();
+  const stallKey = cleanStall.toLowerCase();
 
-  const newVisited = current.visitedStalls.includes(cleanStall)
-    ? current.visitedStalls
-    : [...current.visitedStalls, cleanStall];
+  const isFirstVisit = !current.visitedStalls.includes(cleanStall);
+  const newVisited = isFirstVisit
+    ? [...current.visitedStalls, cleanStall]
+    : current.visitedStalls;
 
   const newBadges = [...current.badges];
   if (!newBadges.includes("fair_wanderer")) {
     newBadges.push("fair_wanderer");
   }
 
-  // Update quest
   const updatedQuests = current.quests.map((q) => {
     if (q.id === "explore_fair") {
       return { ...q, current: 1, completed: true };
@@ -319,7 +437,23 @@ export function recordStallVisit(stallName: string): GamificationState {
     return q;
   });
 
-  const bonusXp = current.visitedStalls.includes(cleanStall) ? 10 : 35;
+  const awarded = current.awardedEvents || [];
+  const newAwarded = [...awarded];
+  let bonusXp = 0;
+
+  // First time visiting this specific stall: +35 XP once
+  const eventKey = `stall_visit:${stallKey}`;
+  if (!newAwarded.includes(eventKey)) {
+    newAwarded.push(eventKey);
+    bonusXp += 35;
+  }
+
+  // Quest explore_fair completion: +50 XP once
+  if (!newAwarded.includes("quest:explore_fair")) {
+    newAwarded.push("quest:explore_fair");
+    bonusXp += 50;
+  }
+
   const newXp = current.xp + bonusXp;
   const { level, xpForNextLevel } = calculateLevel(newXp);
 
@@ -332,14 +466,68 @@ export function recordStallVisit(stallName: string): GamificationState {
     visitedStalls: newVisited,
     badges: newBadges,
     quests: updatedQuests,
+    awardedEvents: newAwarded,
   };
 
   saveGamificationState(updated);
   return updated;
 }
 
-export function recordArtisanOrderSupport(): GamificationState {
+export function recordFairEntry(): GamificationState {
   const current = getGamificationState();
+  const awarded = current.awardedEvents || [];
+
+  const newBadges = [...current.badges];
+  if (!newBadges.includes("fair_wanderer")) {
+    newBadges.push("fair_wanderer");
+  }
+
+  const updatedQuests = current.quests.map((q) => {
+    if (q.id === "explore_fair") {
+      return { ...q, current: 1, completed: true };
+    }
+    return q;
+  });
+
+  if (awarded.includes("quest:explore_fair")) {
+    const updated: GamificationState = {
+      ...current,
+      badges: newBadges,
+      quests: updatedQuests,
+    };
+    saveGamificationState(updated);
+    return updated;
+  }
+
+  const newAwarded = [...awarded, "quest:explore_fair"];
+  const bonusXp = 50; // Explore Fair quest reward
+  const newXp = current.xp + bonusXp;
+  const { level, xpForNextLevel } = calculateLevel(newXp);
+
+  const updated: GamificationState = {
+    ...current,
+    xp: newXp,
+    level,
+    levelTitle: getLevelTitle(level),
+    xpForNextLevel,
+    badges: newBadges,
+    quests: updatedQuests,
+    awardedEvents: newAwarded,
+  };
+
+  saveGamificationState(updated);
+  return updated;
+}
+
+export function recordArtisanOrderSupport(orderId?: string): GamificationState {
+  const current = getGamificationState();
+  const awarded = current.awardedEvents || [];
+
+  const eventKey = orderId ? `order_placed:${orderId}` : `order_placed:generic_${(current.supportedArtisans || 0) + 1}`;
+  if (orderId && awarded.includes(eventKey)) {
+    return current;
+  }
+
   const newCount = (current.supportedArtisans || 0) + 1;
   const newBadges = [...current.badges];
   if (!newBadges.includes("heritage_guardian")) {
@@ -353,7 +541,17 @@ export function recordArtisanOrderSupport(): GamificationState {
     return q;
   });
 
-  const bonusXp = 100; // 100 XP for supporting an artisan order
+  const newAwarded = [...awarded, eventKey];
+  let bonusXp = 0;
+
+  // Order support XP: +100 XP
+  bonusXp += 100;
+
+  // Support artisan quest completion
+  if (!newAwarded.includes("quest:support_artisan")) {
+    newAwarded.push("quest:support_artisan");
+  }
+
   const newXp = current.xp + bonusXp;
   const { level, xpForNextLevel } = calculateLevel(newXp);
 
@@ -366,6 +564,7 @@ export function recordArtisanOrderSupport(): GamificationState {
     supportedArtisans: newCount,
     badges: newBadges,
     quests: updatedQuests,
+    awardedEvents: newAwarded,
   };
 
   saveGamificationState(updated);

@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useLanguage } from "./context/LanguageContext";
 import { LanguageDropdown } from "./components/LanguageDropdown";
+import { GoogleSignInModal } from "./components/GoogleSignInModal";
 
 type Stage = "landing" | "otp";
 export type UserRole = "seller" | "buyer";
@@ -17,6 +18,7 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
   const [mobile, setMobile] = useState("");
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [focusedOtp, setFocusedOtp] = useState<number | null>(null);
+  const [showGoogleModal, setShowGoogleModal] = useState(false);
 
   // 🌐 Multilingual Language Hook
   const { t } = useLanguage();
@@ -324,7 +326,7 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
               {/* Google Sign-in */}
               <button
                 type="button"
-                onClick={handleCompleteLogin}
+                onClick={() => setShowGoogleModal(true)}
                 className="w-full flex items-center justify-center gap-2.5 rounded-2xl py-3 font-semibold text-sm transition-all touch-press mb-3 bg-white border border-stone-200 shadow-xs hover:shadow-md text-slate-800 cursor-pointer"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24">
@@ -433,6 +435,17 @@ export default function OnboardingScreen({ onLogin, initialRole = "seller" }: On
             </button>
           </div>
         )}
+
+        {/* ── Google Sign-in / Account Chooser Modal (In-Shell) ── */}
+        <GoogleSignInModal
+          isOpen={showGoogleModal}
+          onClose={() => setShowGoogleModal(false)}
+          onSuccess={() => {
+            setShowGoogleModal(false);
+            handleCompleteLogin();
+          }}
+          role={role}
+        />
       </div>
     </div>
   );
