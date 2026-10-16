@@ -1,10 +1,11 @@
 // src/ArtisanDashboard.tsx
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { StoreItem } from "./App";
 import { useLanguage } from "./context/LanguageContext";
 import { LanguageDropdown } from "./components/LanguageDropdown";
 import { getDisplayTitle, calculateArtisanEarnings, getLocalizedCity } from "./utils/artisanAiService";
 import { AnimatedNumber } from "./components/motion/MotionPrimitives";
+import { OpportunitiesTab } from "./components/OpportunitiesTab";
 
 export interface OrderItem {
   orderId: string;
@@ -48,7 +49,7 @@ export default function ArtisanDashboard({
   onLogout,
 }: ArtisanDashboardProps) {
   const { t, currentLang } = useLanguage();
-  const [activeTab, setActiveTab] = useState<"products" | "orders" | "earnings">("products");
+  const [activeTab, setActiveTab] = useState<"products" | "orders" | "earnings" | "opportunities">("products");
   const [selectedCertItem, setSelectedCertItem] = useState<StoreItem | null>(null);
 
   // Synced Orders State
@@ -78,6 +79,59 @@ export default function ArtisanDashboard({
   const totalRevenue = earnings.grossSales;
   const pendingOrders = orders.filter((o) => o.status === "Pending").length;
 
+  // Derive reliable artisan profile data from inventory without fabricating or blindly picking inventory[0]
+  const { primaryCraft, reliableLocation, uniqueCrafts } = useMemo(() => {
+    if (!inventory || inventory.length === 0) {
+      return { primaryCraft: undefined, reliableLocation: undefined, uniqueCrafts: [] };
+    }
+
+    // 1. Gather crafts and categories with frequency counting (avoid picking inventory[0] blindly)
+    const craftFrequency = new Map<string, number>();
+    const craftsList: string[] = [];
+
+    inventory.forEach((item) => {
+      const craftCandidate = (item.craft || item.category || item.categoryName || "").trim();
+      if (
+        craftCandidate &&
+        craftCandidate.toLowerCase() !== "unknown" &&
+        craftCandidate.toLowerCase() !== "other"
+      ) {
+        craftFrequency.set(craftCandidate, (craftFrequency.get(craftCandidate) || 0) + 1);
+        if (!craftsList.includes(craftCandidate)) {
+          craftsList.push(craftCandidate);
+        }
+      }
+    });
+
+    let primary: string | undefined = undefined;
+    let maxCount = 0;
+    craftFrequency.forEach((count, craftName) => {
+      if (count > maxCount) {
+        maxCount = count;
+        primary = craftName;
+      }
+    });
+
+    // 2. Gather reliable artisan region (only if non-empty, genuine, and consistent)
+    const regions = inventory
+      .map((item) => (item.artisan_region || "").trim())
+      .filter((r) => r.length > 0 && r.toLowerCase() !== "unknown");
+
+    let location: string | undefined = undefined;
+    if (regions.length > 0) {
+      const regionFrequency = new Map<string, number>();
+      regions.forEach((r) => regionFrequency.set(r, (regionFrequency.get(r) || 0) + 1));
+      let maxRegionCount = 0;
+      regionFrequency.forEach((count, reg) => {
+        if (count > maxRegionCount) {
+          maxRegionCount = count;
+          location = reg;
+        }
+      });
+    }
+
+    return { primaryCraft: primary, reliableLocation: location, uniqueCrafts: craftsList };
+  }, [inventory]);
 
   // Dispatch Order Handler
   const handleDispatch = (orderId: string) => {
@@ -148,7 +202,7 @@ export default function ArtisanDashboard({
                   {t("my_store")}
                 </h1>
                 <p className="text-[11px] text-white/75 font-medium truncate leading-tight mt-0.5">
-                  Kalakriti Store • Node #412
+                  Kalakriti Store
                 </p>
               </div>
             </div>
@@ -180,20 +234,22 @@ export default function ArtisanDashboard({
           </div>
         </div>
 
-        {/* ── 3 Tabs (सामान, आर्डर, कमाई) WITH SLIDING INDICATOR ── */}
-        <div className="flex px-4 pt-3 pb-1 bg-[#FFFBF7] border-b border-[#F0DFD2] gap-1.5 flex-shrink-0 relative">
+        {/* ── 4 Tabs (सामान, आर्डर, कमाई, अवसर) WITH SLIDING INDICATOR ── */}
+        <div className="flex px-2.5 pt-2.5 pb-1 bg-[#FFFBF7] border-b border-[#F0DFD2] gap-1 flex-shrink-0 relative">
           {/* Sliding indicator pill */}
           <div
-            className="absolute top-3 bottom-1 rounded-xl transition-transform duration-250 ease-out bg-[#6B3A2A]"
+            className="absolute top-2.5 bottom-1 rounded-xl transition-transform duration-250 ease-out bg-[#6B3A2A]"
             style={{
-              width: "calc((100% - 32px - 6px) / 3)",
-              left: 16,
+              width: "calc((100% - 20px - 9px) / 4)",
+              left: 10,
               transform:
                 activeTab === "products"
                   ? "translate3d(0, 0, 0)"
                   : activeTab === "orders"
                   ? "translate3d(calc(100% + 3px), 0, 0)"
-                  : "translate3d(calc(200% + 6px), 0, 0)",
+                  : activeTab === "earnings"
+                  ? "translate3d(calc(200% + 6px), 0, 0)"
+                  : "translate3d(calc(300% + 9px), 0, 0)",
               boxShadow: "0 2px 8px rgba(107, 58, 42, 0.3)",
             }}
           />
@@ -201,47 +257,71 @@ export default function ArtisanDashboard({
           <button
             type="button"
             onClick={() => setActiveTab("products")}
-            className="flex-1 py-2 rounded-xl text-xs font-bold transition-colors duration-200 text-center flex items-center justify-center gap-1 relative z-10 touch-press cursor-pointer"
+            className="flex-1 py-1 sm:py-1.5 px-0.5 rounded-xl text-[10px] sm:text-[11px] font-bold transition-colors duration-200 text-center flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 relative z-10 touch-press cursor-pointer"
             style={{
               color: activeTab === "products" ? "white" : "#8B4513",
             }}
+            title={`${t("tab_products")} (${inventory.length})`}
           >
-            <span>🏺</span>
-            <span>{t("tab_products")} ({inventory.length})</span>
+            <span className="text-xs leading-none">🏺</span>
+            <span className="leading-tight tracking-tight whitespace-nowrap">{t("tab_products")}</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab("orders")}
-            className="flex-1 py-2 rounded-xl text-xs font-bold transition-colors duration-200 text-center flex items-center justify-center gap-1 relative z-10 touch-press cursor-pointer"
+            className="flex-1 py-1 sm:py-1.5 px-0.5 rounded-xl text-[10px] sm:text-[11px] font-bold transition-colors duration-200 text-center flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 relative z-10 touch-press cursor-pointer"
             style={{
               color: activeTab === "orders" ? "white" : "#8B4513",
             }}
+            title={t("tab_orders")}
           >
-            <span>📦</span>
-            <span>{t("tab_orders")}</span>
-            {pendingOrders > 0 && (
-              <span className="w-4 h-4 rounded-full bg-red-600 text-white text-[9px] flex items-center justify-center">
-                {pendingOrders}
-              </span>
-            )}
+            <span className="text-xs leading-none relative">
+              📦
+              {pendingOrders > 0 && (
+                <span className="absolute -top-1 -right-2 w-3.5 h-3.5 rounded-full bg-red-600 text-white text-[8px] flex items-center justify-center flex-shrink-0 font-bold">
+                  {pendingOrders}
+                </span>
+              )}
+            </span>
+            <span className="leading-tight tracking-tight whitespace-nowrap">{t("tab_orders")}</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab("earnings")}
-            className="flex-1 py-2 rounded-xl text-xs font-bold transition-colors duration-200 text-center flex items-center justify-center gap-1 relative z-10 touch-press cursor-pointer"
+            className="flex-1 py-1 sm:py-1.5 px-0.5 rounded-xl text-[10px] sm:text-[11px] font-bold transition-colors duration-200 text-center flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 relative z-10 touch-press cursor-pointer"
             style={{
               color: activeTab === "earnings" ? "white" : "#8B4513",
             }}
+            title={t("tab_earnings")}
           >
-            <span>💰</span>
-            <span>{t("tab_earnings")} (₹{earnings.artisanShare})</span>
+            <span className="text-xs leading-none">💰</span>
+            <span className="leading-tight tracking-tight whitespace-nowrap">{t("tab_earnings")}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("opportunities")}
+            className="flex-1 py-1 sm:py-1.5 px-0.5 rounded-xl text-[10px] sm:text-[11px] font-bold transition-colors duration-200 text-center flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 relative z-10 touch-press cursor-pointer"
+            style={{
+              color: activeTab === "opportunities" ? "white" : "#8B4513",
+            }}
+            title={t("tab_opportunities")}
+          >
+            <span className="text-xs leading-none">✨</span>
+            <span className="leading-tight tracking-tight whitespace-nowrap">{t("tab_opportunities")}</span>
           </button>
         </div>
 
         {/* ── Scrollable Tab Content ── */}
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3" style={{ scrollbarWidth: "none", paddingBottom: 105 }}>
+        <div
+          className="flex-1 overflow-y-auto px-4 py-3 space-y-3"
+          style={{
+            scrollbarWidth: "none",
+            paddingBottom: activeTab === "opportunities" ? 30 : 105,
+          }}
+        >
           {/* TAB 1: PRODUCTS INVENTORY */}
           {activeTab === "products" && (
             <>
@@ -535,6 +615,17 @@ export default function ArtisanDashboard({
               </div>
             </div>
           )}
+
+          {/* TAB 4: OPPORTUNITIES (TINYFISH SEARCH + FETCH + GEMINI) */}
+          {activeTab === "opportunities" && (
+            <OpportunitiesTab
+              initialCraft={primaryCraft || ""}
+              initialLocation={reliableLocation || ""}
+              artisanCraft={primaryCraft}
+              artisanLocation={reliableLocation}
+              artisanCrafts={uniqueCrafts}
+            />
+          )}
         </div>
 
         {/* ── Modal for KalaPramaan Digital Certificate ── */}
@@ -580,23 +671,25 @@ export default function ArtisanDashboard({
         )}
 
         {/* ── Sticky Bottom Bar: Add Product ── */}
-        <div
-          className="absolute bottom-0 left-0 right-0 px-5 pb-7 pt-4 flex-shrink-0"
-          style={{ background: "linear-gradient(to top, #FFFBF7 85%, transparent)" }}
-        >
-          <button
-            type="button"
-            onClick={onAddNewProduct}
-            className="w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 font-bold text-base text-white shadow-lg transition-all active:scale-[0.98]"
-            style={{
-              background: "linear-gradient(135deg, #8B4513 0%, #6B3A2A 100%)",
-              boxShadow: "0 8px 24px rgba(107,58,42,0.35)",
-            }}
+        {activeTab !== "opportunities" && (
+          <div
+            className="absolute bottom-0 left-0 right-0 px-5 pb-7 pt-4 flex-shrink-0"
+            style={{ background: "linear-gradient(to top, #FFFBF7 85%, transparent)" }}
           >
-            <span className="text-lg">＋</span>
-            <span style={{ fontFamily: "'Noto Serif', serif" }}>{t("add_product_to_shop")}</span>
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={onAddNewProduct}
+              className="w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 font-bold text-base text-white shadow-lg transition-all active:scale-[0.98]"
+              style={{
+                background: "linear-gradient(135deg, #8B4513 0%, #6B3A2A 100%)",
+                boxShadow: "0 8px 24px rgba(107,58,42,0.35)",
+              }}
+            >
+              <span className="text-lg">＋</span>
+              <span style={{ fontFamily: "'Noto Serif', serif" }}>{t("add_product_to_shop")}</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

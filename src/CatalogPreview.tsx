@@ -8,6 +8,9 @@ export interface CatalogData {
   title_en: string;
   title_local?: string;
   suggested_price: number;
+  categoryName?: string;
+  category?: string;
+  craft?: string;
   imageUrl?: string;
   originalImageUrl?: string;
   transparentImageUrl?: string;
@@ -37,6 +40,7 @@ export interface CatalogPreviewProps {
   onBack: () => void;
   onCheckout: () => void;
   onEdit?: () => void;
+  onCategoryChange?: (newCategory: string) => void;
 }
 
 export default function CatalogPreview({
@@ -44,8 +48,12 @@ export default function CatalogPreview({
   onBack,
   onCheckout,
   onEdit,
+  onCategoryChange,
 }: CatalogPreviewProps) {
   const { t, currentLang, languages } = useLanguage();
+  const [selectedCategory, setSelectedCategory] = useState<string>(
+    data.categoryName || data.category || "Handicrafts"
+  );
   const activeLangMeta = languages?.find((l) => l.code === currentLang) || {
     code: "hi",
     nativeName: "हिन्दी",
@@ -194,6 +202,36 @@ export default function CatalogPreview({
                 {data.title_en}
               </p>
             )}
+
+            {/* 🏺 Craft Category Badge & Editor */}
+            <div className="flex items-center justify-between pt-2 border-t border-[#C4886B]/15">
+              <span className="text-[11px] font-semibold text-[#8B4513] flex items-center gap-1">
+                🏷️ {t("category") || "Category"}:
+              </span>
+              {onCategoryChange ? (
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSelectedCategory(val);
+                    onCategoryChange(val);
+                  }}
+                  className="text-xs bg-[#FFF8F0] border border-[#C4886B]/40 rounded-lg px-2.5 py-1 text-[#3D1F0F] font-semibold focus:outline-none focus:ring-1 focus:ring-[#8B4513]"
+                >
+                  <option value="Pottery">🏺 Pottery</option>
+                  <option value="Painting">🎨 Painting</option>
+                  <option value="Weaving">🧵 Weaving</option>
+                  <option value="Woodcraft">🪵 Woodcraft</option>
+                  <option value="Jewellery">💍 Jewellery</option>
+                  <option value="Embroidery">🪡 Embroidery</option>
+                  <option value="Handicrafts">✨ Other Handicrafts</option>
+                </select>
+              ) : (
+                <span className="text-xs bg-[#FFF8F0] border border-[#C4886B]/40 rounded-lg px-2.5 py-1 text-[#3D1F0F] font-semibold">
+                  {selectedCategory}
+                </span>
+              )}
+            </div>
           </div>
 
           {/* 2. Artisan Trust Header */}

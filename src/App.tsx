@@ -31,6 +31,7 @@ const CATEGORIES: Array<{ hi: string; en: string; key: TranslationKey }> = [
   { hi: "मिट्टी", en: "Pottery", key: "cat_pottery" },
   { hi: "बुनाई", en: "Weaving", key: "cat_weaving" },
   { hi: "लकड़ी", en: "Wood", key: "cat_wood" },
+  { hi: "आभूषण", en: "Jewellery", key: "cat_jewellery" },
   { hi: "कढ़ाई", en: "Embroidery", key: "cat_embroidery" },
 ];
 
@@ -39,6 +40,7 @@ export interface StoreItem extends CatalogData {
   quantity: number;
   publishedAt?: string;
   categoryName?: string;
+  category?: string;
 }
 
 const INITIAL_SEED: StoreItem[] = [
@@ -49,6 +51,8 @@ const INITIAL_SEED: StoreItem[] = [
     title_local: "राजस्थानी पारंपरिक हस्तनिर्मित बाहुल्यांची जोडी (कठपुतळी)",
     suggested_price: 349,
     quantity: 3,
+    categoryName: "Woodcraft",
+    category: "Woodcraft",
     imageUrl: "https://images.unsplash.com/photo-1599818471241-10515152865c?w=500",
     imageSignature: "rajasthani_puppet_pair_seed",
     artisan_name: "शंकर लाल भाट",
@@ -88,6 +92,8 @@ const INITIAL_SEED: StoreItem[] = [
     title_local: "सजावटी हस्तनिर्मित लाल मातीचा कलश (घडा)",
     suggested_price: 199,
     quantity: 5,
+    categoryName: "Pottery",
+    category: "Pottery",
     imageUrl: "https://images.unsplash.com/photo-1604264726154-26480e76f4e1?w=500",
     imageSignature: "red_terracotta_kalash_seed",
     artisan_name: "रमेश प्रजापति",
@@ -991,6 +997,28 @@ export default function App() {
     }
   };
 
+  const handleUpdateCategory = (newCategory: string) => {
+    if (!selectedPreviewItem) return;
+    const updated = {
+      ...selectedPreviewItem,
+      categoryName: newCategory,
+      category: newCategory,
+    };
+    setSelectedPreviewItem(updated);
+
+    // If item exists in inventory, update it as well
+    setInventory((prev) => {
+      const clean = prev.map((item) =>
+        (item.id === (updated as any).id || areItemsDuplicate(item, updated))
+          ? { ...item, categoryName: newCategory, category: newCategory }
+          : item
+      );
+      localStorage.setItem("kalakriti_inventory", JSON.stringify(clean));
+      window.dispatchEvent(new Event("storage"));
+      return clean;
+    });
+  };
+
   // 🛡️ नया सामान जोड़ते समय डुप्लीकेट चेक (Issue 2 Permanent Fix)
   const saveProductToInventory = (catalogItem: CatalogData) => {
     // अगर वही फोटो, वही सिग्नेचर या वही सामान पहले से दुकान में है, तो नया कार्ड न बनाएं—स्टॉक बढ़ा दें!
@@ -1002,6 +1030,8 @@ export default function App() {
         idx === existingIndex
           ? {
               ...item,
+              categoryName: (catalogItem as any).categoryName || (catalogItem as any).category || item.categoryName || item.category,
+              category: (catalogItem as any).category || (catalogItem as any).categoryName || item.category || item.categoryName,
               quantity: (Number(item.quantity) || 0) + (Number((catalogItem as any).quantity) || 1),
               imageUrl: catalogItem.imageUrl || item.imageUrl,
               imageSignature: catalogItem.imageSignature || item.imageSignature,
@@ -1013,12 +1043,14 @@ export default function App() {
           : item
       );
     } else {
+      const cat = (catalogItem as any).categoryName || (catalogItem as any).category || (selectedCategory !== undefined && CATEGORIES[selectedCategory] ? CATEGORIES[selectedCategory].en : "Handicrafts");
       const newEntry: StoreItem = {
         id: Date.now().toString(),
         ...catalogItem,
         quantity: (catalogItem as any).quantity !== undefined ? Math.max(0, Number((catalogItem as any).quantity) || 0) : 1,
         publishedAt: "आज",
-        categoryName: CATEGORIES[selectedCategory].en,
+        categoryName: cat,
+        category: cat,
         localizedContent: catalogItem.localizedContent || {},
       };
       updatedList = [newEntry, ...inventory];
@@ -1810,6 +1842,7 @@ Output ONLY valid JSON matching this schema:
           data={selectedPreviewItem}
           onBack={() => setScreen("capture")}
           onCheckout={handlePublishToOndc}
+          onCategoryChange={handleUpdateCategory}
         />
       </PageTransition>
     );

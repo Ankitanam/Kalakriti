@@ -1,6 +1,6 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Html, Text } from "@react-three/drei";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import * as THREE from "three";
 import { supabase } from "../lib/supabase";
 import {
@@ -8,6 +8,20 @@ import {
   recordStallVisit,
   recordCraftDiscovery,
 } from "../utils/gamificationService";
+import { useLanguage, TRANSLATIONS } from "../context/LanguageContext";
+import {
+  StallType,
+  DynamicStallData,
+  normalizeCategoryName,
+  getCategoryKey,
+  inferCraftTypeAndVisuals,
+  getLocalizedStallName,
+  generateDynamicStalls,
+  getStallProducts,
+  isStallCollision,
+  findNearestStall,
+  extractProductCategory,
+} from "../utils/craftFairStallService";
 
 export interface GameWorldProps {
   onExit?: () => void;
@@ -95,10 +109,10 @@ const mapInventoryToStallProducts = (inv: any[]): DatabaseProduct[] => {
 };
 
 /* =========================================================
-   STALL DATA
+   STALL PRESETS & COMPATIBILITY DATA
 ========================================================= */
 
-const stalls = [
+export const DEFAULT_STALL_PRESETS = [
   {
     x: -6,
     z: -5,
@@ -149,40 +163,45 @@ const stalls = [
   },
 ];
 
+export const stalls = DEFAULT_STALL_PRESETS;
+
 /* =========================================================
-   GROUND
+   GROUND (Scales dynamically with stall count)
 ========================================================= */
 
-function Ground() {
+function Ground({ roadLength = 24 }: { roadLength?: number }) {
+  const groundSize = Math.max(30, roadLength + 8);
+  const sidewalkZ = Math.max(3, roadLength * 0.35);
+
   return (
     <>
       {/* MAIN GROUND */}
       <mesh rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[30, 30]} />
+        <planeGeometry args={[groundSize, groundSize]} />
         <meshStandardMaterial color="#d6b98c" />
       </mesh>
 
       {/* MAIN ROAD */}
       <mesh position={[0, 0.03, 2]}>
-        <boxGeometry args={[5, 0.05, 24]} />
+        <boxGeometry args={[5, 0.05, roadLength]} />
         <meshStandardMaterial color="#c9a77b" />
       </mesh>
 
       {/* LEFT SIDE WALK */}
       <mesh position={[-6, 0.03, 2]}>
-        <boxGeometry args={[8, 0.05, 3]} />
+        <boxGeometry args={[8, 0.05, sidewalkZ]} />
         <meshStandardMaterial color="#c9a77b" />
       </mesh>
 
       {/* RIGHT SIDE WALK */}
       <mesh position={[6, 0.03, 2]}>
-        <boxGeometry args={[8, 0.05, 3]} />
+        <boxGeometry args={[8, 0.05, sidewalkZ]} />
         <meshStandardMaterial color="#c9a77b" />
       </mesh>
 
       {/* ROAD CENTER STRIP */}
       <mesh position={[0, 0.065, 2]}>
-        <boxGeometry args={[0.12, 0.02, 24]} />
+        <boxGeometry args={[0.12, 0.02, roadLength]} />
         <meshStandardMaterial color="#ead7b5" />
       </mesh>
     </>
@@ -840,9 +859,13 @@ function isBlocked(x: number, z: number) {
 function Player({
   onEnterStall,
   hideInteractionPrompt = false,
+  activeStalls = stalls,
+  currentLang = "en",
 }: {
   onEnterStall: (stallName: string) => void;
   hideInteractionPrompt?: boolean;
+  activeStalls?: any[];
+  currentLang?: string;
 }) {
   const playerRef = useRef<THREE.Group>(null);
 
@@ -879,12 +902,32 @@ function Player({
 
   const { camera } = useThree();
 
+  // Reset keys when interaction prompt is hidden or modal opens
+  useEffect(() => {
+    if (hideInteractionPrompt) {
+      keys.current.w = false;
+      keys.current.a = false;
+      keys.current.s = false;
+      keys.current.d = false;
+      keys.current.e = false;
+    }
+  }, [hideInteractionPrompt]);
+
   // =========================
   // KEYBOARD CONTROLS
   // =========================
 
   useEffect(() => {
+    const isFormElement = (target: EventTarget | null): boolean => {
+      if (!target || !(target instanceof HTMLElement)) return false;
+      const tag = target.tagName.toLowerCase();
+      return tag === "input" || tag === "textarea" || tag === "select" || target.isContentEditable;
+    };
+
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (isFormElement(event.target)) return;
+      if (hideInteractionPrompt) return;
+
       const key = event.key.toLowerCase();
 
       if (key === "w" || key === "arrowup") {
@@ -915,6 +958,8 @@ function Player({
     };
 
     const handleKeyUp = (event: KeyboardEvent) => {
+      if (isFormElement(event.target)) return;
+
       const key = event.key.toLowerCase();
 
       if (key === "w" || key === "arrowup") {
@@ -938,28 +983,24 @@ function Player({
       }
     };
 
-    window.addEventListener(
-      "keydown",
-      handleKeyDown
-    );
+    const handleBlur = () => {
+      keys.current.w = false;
+      keys.current.a = false;
+      keys.current.s = false;
+      keys.current.d = false;
+      keys.current.e = false;
+    };
 
-    window.addEventListener(
-      "keyup",
-      handleKeyUp
-    );
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", handleBlur);
 
     return () => {
-      window.removeEventListener(
-        "keydown",
-        handleKeyDown
-      );
-
-      window.removeEventListener(
-        "keyup",
-        handleKeyUp
-      );
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", handleBlur);
     };
-  }, []);
+  }, [hideInteractionPrompt]);
 
   // =========================
   // GAME LOOP
@@ -967,9 +1008,12 @@ function Player({
 
   useFrame((state, delta) => {
     if (!playerRef.current) return;
+    if (hideInteractionPrompt) return;
 
-    const speed = 0.08;
-    const turnSpeed = 0.04;
+    // Framerate-independent normalized delta time (clamped between ~15fps and 120fps)
+    const clampedDelta = Math.min(Math.max(delta, 0.008), 0.066);
+    const moveSpeed = 4.8 * clampedDelta;
+    const turnSpeed = 2.4 * clampedDelta;
 
     // =========================
     // A / D = TURN
@@ -987,88 +1031,63 @@ function Player({
     // FIND PLAYER DIRECTION
     // =========================
 
-    const direction = new THREE.Vector3(
-      0,
-      0,
-      -1
-    );
-
-    direction.applyQuaternion(
-      playerRef.current.quaternion
-    );
+    const direction = new THREE.Vector3(0, 0, -1);
+    direction.applyQuaternion(playerRef.current.quaternion);
 
     // =========================
-    // W / S = MOVE
+    // W / S = MOVE WITH AXIS SLIDING
     // =========================
 
-    let newX =
-      playerRef.current.position.x;
+    const currentX = playerRef.current.position.x;
+    const currentZ = playerRef.current.position.z;
 
-    let newZ =
-      playerRef.current.position.z;
+    let targetDeltaX = 0;
+    let targetDeltaZ = 0;
 
     if (keys.current.w) {
-      newX += direction.x * speed;
-      newZ += direction.z * speed;
+      targetDeltaX += direction.x * moveSpeed;
+      targetDeltaZ += direction.z * moveSpeed;
     }
 
     if (keys.current.s) {
-      newX -= direction.x * speed;
-      newZ -= direction.z * speed;
+      targetDeltaX -= direction.x * moveSpeed;
+      targetDeltaZ -= direction.z * moveSpeed;
     }
 
-    // =========================
-    // COLLISION WITH STALLS
-    // =========================
+    let moved = false;
 
-    let blocked = false;
+    if (targetDeltaX !== 0 || targetDeltaZ !== 0) {
+      // 1. Check X movement independently (enables smooth sliding along Z axis)
+      const candX = Math.max(-10, Math.min(10, currentX + targetDeltaX));
+      const blockedX = isStallCollision(candX, currentZ, activeStalls, 2.3, 1.85);
 
-    for (const stall of stalls) {
-      if (
-        Math.abs(newX - stall.x) < 2.5 &&
-        Math.abs(newZ - stall.z) < 2
-      ) {
-        blocked = true;
-        break;
+      if (!blockedX) {
+        playerRef.current.position.x = candX;
       }
-    }
 
-    if (!blocked) {
-      playerRef.current.position.x = newX;
-      playerRef.current.position.z = newZ;
+      // 2. Check Z movement independently (enables smooth sliding along X axis)
+      const activeX = playerRef.current.position.x;
+      const candZ = Math.max(-15, Math.min(30, currentZ + targetDeltaZ));
+      const blockedZ = isStallCollision(activeX, candZ, activeStalls, 2.3, 1.85);
+
+      if (!blockedZ) {
+        playerRef.current.position.z = candZ;
+      }
+
+      moved = Math.abs(playerRef.current.position.x - currentX) > 0.0001 ||
+              Math.abs(playerRef.current.position.z - currentZ) > 0.0001;
     }
 
     // =========================
     // FIND NEAREST STALL
     // =========================
 
-    let nearestStall:
-      | (typeof stalls)[number]
-      | null = null;
-
-    let closestDistance = Infinity;
-
-    for (const stall of stalls) {
-      const dx =
-        playerRef.current.position.x -
-        stall.x;
-
-      const dz =
-        playerRef.current.position.z -
-        stall.z;
-
-      const distance = Math.sqrt(
-        dx * dx + dz * dz
-      );
-
-      if (
-        distance < 4 &&
-        distance < closestDistance
-      ) {
-        closestDistance = distance;
-        nearestStall = stall;
-      }
-    }
+    const nearestStall = findNearestStall(
+      playerRef.current.position.x,
+      playerRef.current.position.z,
+      activeStalls,
+      4
+    );
 
     // =========================
     // SHOW E MESSAGE
@@ -1076,7 +1095,7 @@ function Player({
 
     setNearStall(
       nearestStall
-        ? nearestStall.name
+        ? nearestStall.displayName
         : null
     );
 
@@ -1089,7 +1108,7 @@ function Player({
       nearestStall
     ) {
       onEnterStall(
-        nearestStall.name
+        nearestStall.categoryKey
       );
 
       keys.current.e = false;
@@ -1099,10 +1118,7 @@ function Player({
     // WALKING ANIMATION
     // =========================
 
-    const isMoving =
-      (keys.current.w ||
-        keys.current.s) &&
-      !blocked;
+    const isMoving = (keys.current.w || keys.current.s) && moved;
 
     if (isMoving) {
       walkTime.current +=
@@ -1544,6 +1560,95 @@ function Player({
   );
 }
 /* =========================================================
+   FAIR EMPTY STATE (3D Welcome Pavilion)
+========================================================= */
+
+function FairEmptyState({ currentLang = "en" }: { currentLang?: string }) {
+  const title =
+    (TRANSLATIONS.fair_empty_title as any)?.[currentLang] ||
+    TRANSLATIONS.fair_empty_title?.en ||
+    "Welcome to Kalakriti Virtual Craft Fair";
+
+  const subtitle =
+    (TRANSLATIONS.fair_empty_desc as any)?.[currentLang] ||
+    TRANSLATIONS.fair_empty_desc?.en ||
+    "Stalls are being prepared. Add products from the Seller Dashboard.";
+
+  return (
+    <group position={[0, 0, 0]}>
+      {/* DECORATIVE ARCHWAY PILLARS */}
+      <mesh position={[-3.2, 2.2, 0]}>
+        <boxGeometry args={[0.35, 4.4, 0.35]} />
+        <meshStandardMaterial color="#6b4226" />
+      </mesh>
+      <mesh position={[3.2, 2.2, 0]}>
+        <boxGeometry args={[0.35, 4.4, 0.35]} />
+        <meshStandardMaterial color="#6b4226" />
+      </mesh>
+
+      {/* ARCHWAY BEAMS */}
+      <mesh position={[0, 4.3, 0]}>
+        <boxGeometry args={[7, 0.3, 0.4]} />
+        <meshStandardMaterial color="#51321f" />
+      </mesh>
+      <mesh position={[0, 4.65, 0]}>
+        <boxGeometry args={[6.2, 0.25, 0.35]} />
+        <meshStandardMaterial color="#70452d" />
+      </mesh>
+
+      {/* MARIGOLD GARLAND */}
+      {[-2.5, -1.8, -1.1, -0.4, 0.3, 1.0, 1.7, 2.4].map((gx, idx) => (
+        <mesh key={idx} position={[gx, 4.05, 0.05]}>
+          <sphereGeometry args={[0.16, 8, 8]} />
+          <meshStandardMaterial color={idx % 2 === 0 ? "#f59e0b" : "#dc2626"} />
+        </mesh>
+      ))}
+
+      {/* MAIN WOODEN PLAQUE */}
+      <mesh position={[0, 3.1, 0]}>
+        <boxGeometry args={[6, 1.6, 0.18]} />
+        <meshStandardMaterial color="#4e2f1e" />
+      </mesh>
+      <mesh position={[0, 3.1, 0.1]}>
+        <boxGeometry args={[5.7, 1.35, 0.05]} />
+        <meshStandardMaterial color="#f7efe3" />
+      </mesh>
+
+      {/* TEXT ON PLAQUE */}
+      <Text
+        position={[0, 3.35, 0.15]}
+        fontSize={0.32}
+        maxWidth={5.4}
+        anchorX="center"
+        anchorY="middle"
+        color="#70452d"
+        outlineWidth={0.015}
+        outlineColor="#ead9c3"
+      >
+        {`🎪 ${title}`}
+      </Text>
+
+      <Text
+        position={[0, 2.75, 0.15]}
+        fontSize={0.2}
+        maxWidth={5.2}
+        anchorX="center"
+        anchorY="middle"
+        color="#574235"
+      >
+        {subtitle}
+      </Text>
+
+      {/* ARTISAN WELCOME CHARACTER */}
+      <ArtisanCharacter
+        position={[0, 0.05, 1.2]}
+        shirtColor="#b86f45"
+      />
+    </group>
+  );
+}
+
+/* =========================================================
    WORLD
 ========================================================= */
 
@@ -1551,11 +1656,21 @@ function World({
   onEnterStall,
   dbProducts,
   hideInteractionPrompt = false,
+  currentLang = "en",
 }: {
   onEnterStall: (name: string) => void;
   dbProducts: DatabaseProduct[];
   hideInteractionPrompt?: boolean;
+  currentLang?: string;
 }) {
+  const dynamicStalls = useMemo(
+    () => generateDynamicStalls(dbProducts, currentLang, TRANSLATIONS),
+    [dbProducts, currentLang]
+  );
+
+  const totalRows = Math.max(1, Math.ceil(dynamicStalls.length / 2));
+  const roadLength = Math.max(24, (totalRows + 1) * 7);
+
   return (
     <>
       {/* =====================================================
@@ -1575,10 +1690,10 @@ function World({
       />
 
       {/* =====================================================
-          GROUND
+          GROUND (Scales dynamically)
       ===================================================== */}
 
-      <Ground />
+      <Ground roadLength={roadLength} />
 
       {/* =====================================================
           TREES
@@ -1600,87 +1715,30 @@ function World({
       <Player
         onEnterStall={onEnterStall}
         hideInteractionPrompt={hideInteractionPrompt}
+        activeStalls={dynamicStalls}
+        currentLang={currentLang}
       />
 
       {/* =====================================================
-          LEFT STALLS
+          DYNAMIC STALLS OR EMPTY STATE
       ===================================================== */}
 
-      <Stall
-        x={-6}
-        z={-5}
-        color="#b86f45"
-        name="Meera Handloom"
-        facing="left"
-        type="textile"
-        onEnter={() =>
-          onEnterStall("Meera Handloom")
-        }
-      />
-
-      <Stall
-        x={-6}
-        z={2}
-        color="#477da3"
-        name="Rajasthan Pottery"
-        facing="left"
-        type="pottery"
-        onEnter={() =>
-          onEnterStall("Rajasthan Pottery")
-        }
-      />
-
-      <Stall
-        x={-6}
-        z={9}
-        color="#9a633c"
-        name="Woodcraft"
-        facing="left"
-        type="wood"
-        onEnter={() =>
-          onEnterStall("Woodcraft")
-        }
-      />
-
-      {/* =====================================================
-          RIGHT STALLS
-      ===================================================== */}
-
-      <Stall
-        x={6}
-        z={-5}
-        color="#a65f42"
-        name="Banarasi Weaves"
-        facing="right"
-        type="textile"
-        onEnter={() =>
-          onEnterStall("Banarasi Weaves")
-        }
-      />
-
-      <Stall
-        x={6}
-        z={2}
-        color="#477da3"
-        name="Blue Pottery"
-        facing="right"
-        type="pottery"
-        onEnter={() =>
-          onEnterStall("Blue Pottery")
-        }
-      />
-
-      <Stall
-        x={6}
-        z={9}
-        color="#d19b35"
-        name="Indian Jewellery"
-        facing="right"
-        type="jewellery"
-        onEnter={() =>
-          onEnterStall("Indian Jewellery")
-        }
-      />
+      {dynamicStalls.length === 0 ? (
+        <FairEmptyState currentLang={currentLang} />
+      ) : (
+        dynamicStalls.map((stall) => (
+          <Stall
+            key={stall.id}
+            x={stall.x}
+            z={stall.z}
+            color={stall.color}
+            name={stall.displayName}
+            facing={stall.facing}
+            type={stall.type}
+            onEnter={() => onEnterStall(stall.categoryKey)}
+          />
+        ))
+      )}
     </>
   );
 }
@@ -1702,74 +1760,11 @@ function ShopPanel({
   ) => void;
   dbProducts: DatabaseProduct[];
 }) {
-  const normalizedStall = stallName.toLowerCase();
-
-  const getStallKeywords = (name: string) => {
-    if (name.includes("wood")) {
-      return [
-        "wood", "wooden", "woodwork", "puppet", "doll",
-        "kathputli", "लकड़ी", "लकड़ी", "कठपुतली"
-      ];
-    }
-
-    if (name.includes("pottery") || name.includes("pot")) {
-      return [
-        "pottery", "pot", "clay", "ceramic", "terracotta",
-        "mitti", "मिट्टी", "मृत्तिका"
-      ];
-    }
-
-    if (name.includes("weav") || name.includes("handloom")) {
-      return [
-        "weaving", "weave", "textile", "handloom", "saree", "silk",
-        "fabric", "cloth", "बुनाई", "कढ़ाई"
-      ];
-    }
-
-    if (name.includes("jewel")) {
-      return [
-        "jewellery", "jewelry", "jewel", "ornament", "gold", "silver", "आभूषण"
-      ];
-    }
-
-    if (name.includes("paint")) {
-      return [
-        "painting", "paint", "art", "madhubani", "pichwai", "चित्रकारी"
-      ];
-    }
-
-    return [];
-  };
-
-  const stallKeywords = getStallKeywords(normalizedStall);
-
-  const stallProducts = dbProducts.filter((product) => {
-    if (product.artisan?.name?.toLowerCase() === stallName.toLowerCase()) {
-      return true;
-    }
-    if (product.category && stallName.toLowerCase().includes(product.category.toLowerCase())) {
-      return true;
-    }
-    const searchableText = [
-      product.title,
-      product.title_en,
-      product.title_hi,
-      product.category,
-      product.categoryName,
-      product.description,
-      product.story,
-      product.artisan?.name,
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-
-    return stallKeywords.some((keyword) =>
-      searchableText.includes(keyword.toLowerCase())
-    );
-  });
-
-  const displayProducts = stallProducts.length > 0 ? stallProducts : dbProducts.slice(0, 4);
+  const { currentLang, t } = useLanguage();
+  const normalizedKey = getCategoryKey(stallName);
+  const displayTitle = getLocalizedStallName(normalizedKey, stallName, currentLang, TRANSLATIONS);
+  // Genuinely filter products matching this stall's category strictly
+  const displayProducts = getStallProducts(dbProducts, stallName);
 
   return (
     <div
@@ -1828,7 +1823,7 @@ function ShopPanel({
                 fontSize: "32px",
               }}
             >
-              {stallName}
+              {displayTitle}
             </h1>
 
             <p
@@ -2024,10 +2019,24 @@ function ShopPanel({
             ))}
           </div>
         ) : (
-          <p>
-            No products available for this
-            artisan yet.
-          </p>
+          <div
+            style={{
+              padding: "40px 20px",
+              textAlign: "center",
+              background: "white",
+              borderRadius: "16px",
+              border: "2px dashed #d6b98c",
+              margin: "15px 0",
+            }}
+          >
+            <div style={{ fontSize: "48px", marginBottom: "12px" }}>🏪</div>
+            <h3 style={{ fontSize: "20px", fontWeight: "bold", color: "#3e2723", margin: "0 0 8px 0" }}>
+              {t("stall_no_products") || "No products available in this stall yet."}
+            </h3>
+            <p style={{ fontSize: "14px", color: "#795548", maxWidth: "420px", margin: "0 auto", lineHeight: 1.5 }}>
+              {t("fair_empty_desc") || "Artisans can list their authentic handmade creations from the Seller Dashboard to display them in this craft pavilion."}
+            </p>
+          </div>
         )}
 
         {/* BACK BUTTON */}
@@ -2060,6 +2069,7 @@ export default function GameWorld({
   inventory = [],
   onAddToCart,
 }: GameWorldProps) {
+  const { currentLang, t } = useLanguage();
 
 
   const [enteredStall, setEnteredStall] =
@@ -2175,8 +2185,8 @@ export default function GameWorld({
           item.quick_summary_en ||
           "",
         image_url: item.imageUrl || item.image_url || "",
-        category: item.categoryName || item.category || item.craft || "",
-        categoryName: item.categoryName,
+        category: item.categoryName || item.category || item.craft || extractProductCategory(item) || "",
+        categoryName: item.categoryName || extractProductCategory(item),
         price: Number(item.suggested_price ?? item.price ?? 0),
         stock: Math.max(0, Number(item.quantity ?? 1)),
         source: "local" as const,
@@ -2423,7 +2433,11 @@ export default function GameWorld({
         }}
       >
         <span>🎪</span>
-        <span>3D Virtual Craft Fair • Explore Stalls</span>
+        <span>
+          {effectiveProducts.length === 0
+            ? t("fair_empty_title") || "3D Virtual Craft Fair • Welcome Plaza"
+            : t("fair_title") || "3D Virtual Craft Fair • Explore Stalls"}
+        </span>
       </div>
 
       {/* =================================================
@@ -2590,7 +2604,8 @@ export default function GameWorld({
         <World
           onEnterStall={handleEnterStall}
           dbProducts={effectiveProducts}
-          hideInteractionPrompt={Boolean(enteredStall)}
+          hideInteractionPrompt={Boolean(enteredStall || selectedProduct || cartOpen)}
+          currentLang={currentLang}
         />
       </Canvas>
 

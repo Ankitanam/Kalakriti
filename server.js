@@ -15,6 +15,7 @@ import {
 } from "./src/utils/ondc/ondcCrypto.ts";
 import { transcribeAudioPayload, CRAFT_VOCABULARY } from "./src/utils/transcribeService.ts";
 import { enhanceImagePayload } from "./src/utils/imageService.ts";
+import { handleOpportunitySearchRequest } from "./src/utils/opportunitySearchService.ts";
 
 dotenv.config();
 
@@ -570,6 +571,64 @@ app.post("/api/enhance-image", async (req, res) => {
   } catch (err) {
     console.error("[IMAGE API] endpoint error:", err);
     res.status(500).json({ success: false, error: err.message || "Internal Server Error" });
+  }
+});
+
+// ── Craft Opportunity Finder: TinyFish Search Endpoint ──
+app.post("/api/opportunities/search", async (req, res) => {
+  const clientAbortController = new AbortController();
+
+  const onClose = () => {
+    if (!res.writableEnded) {
+      clientAbortController.abort();
+    }
+  };
+
+  res.on("close", onClose);
+
+  const isStreaming = Boolean(req.body?.stream || req.headers["accept"] === "text/event-stream");
+  if (isStreaming) {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders?.();
+  }
+
+  try {
+    const apiKey = process.env.TINYFISH_API_KEY;
+    const geminiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_KEY || process.env.VITE_GEMINI_API_KEY;
+    const { status, body } = await handleOpportunitySearchRequest(req.body, {
+      apiKey,
+      geminiKey,
+      signal: clientAbortController.signal,
+      onProgress: (event) => {
+        if (isStreaming && !res.writableEnded) {
+          res.write(`data: ${JSON.stringify({ type: "progress", ...event })}\n\n`);
+        }
+      },
+    });
+
+    if (!res.writableEnded) {
+      if (isStreaming) {
+        res.write(`data: ${JSON.stringify({ type: "result", status, payload: body })}\n\n`);
+        res.end();
+      } else {
+        res.status(status).json(body);
+      }
+    }
+  } catch (err) {
+    if (clientAbortController.signal.aborted || res.writableEnded) {
+      return;
+    }
+    console.error("[OPPORTUNITY SEARCH API] endpoint error:", err);
+    if (isStreaming) {
+      res.write(`data: ${JSON.stringify({ type: "error", error: "Internal Server Error" })}\n\n`);
+      res.end();
+    } else {
+      res.status(500).json({ success: false, error: "Internal Server Error" });
+    }
+  } finally {
+    res.removeListener("close", onClose);
   }
 });
 

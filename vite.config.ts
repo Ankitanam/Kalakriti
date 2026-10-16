@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import siteConfiguration from './.figma/make/site.json'
 import { transcribeAudioPayload } from './src/utils/transcribeService.ts'
 import { enhanceImagePayload } from './src/utils/imageService.ts'
+import { handleOpportunitySearchRequest } from './src/utils/opportunitySearchService.ts'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -125,15 +126,96 @@ function kalakritiTranscriptionPlugin(env: Record<string, string> = {}): Plugin 
         });
     };
 
+    const opportunitySearchHandler = async (req: any, res: any) => {
+        if (req.method !== 'POST') {
+            res.statusCode = 405;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ success: false, error: 'Method Not Allowed' }));
+            return;
+        }
+
+        const clientAbortController = new AbortController();
+        const onClose = () => {
+            if (!res.writableEnded) {
+                clientAbortController.abort();
+            }
+        };
+        res.on('close', onClose);
+
+        let body = '';
+        req.on('data', (chunk: any) => {
+            body += chunk;
+        });
+
+        req.on('end', async () => {
+            let isStreaming = false;
+            try {
+                if (clientAbortController.signal.aborted || res.writableEnded) {
+                    return;
+                }
+                const parsed = JSON.parse(body || '{}');
+                isStreaming = Boolean(parsed?.stream || req.headers['accept'] === 'text/event-stream');
+                if (isStreaming) {
+                    res.writeHead(200, {
+                        'Content-Type': 'text/event-stream',
+                        'Cache-Control': 'no-cache, no-transform',
+                        'Connection': 'keep-alive',
+                    });
+                }
+
+                const tinyFishKey = env.TINYFISH_API_KEY || process.env.TINYFISH_API_KEY;
+                const geminiKey = env.GEMINI_API_KEY || env.VITE_GEMINI_KEY || env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_KEY || process.env.VITE_GEMINI_API_KEY;
+
+                const { status, body: responseBody } = await handleOpportunitySearchRequest(parsed, {
+                    apiKey: tinyFishKey,
+                    geminiKey,
+                    signal: clientAbortController.signal,
+                    onProgress: (event) => {
+                        if (isStreaming && !res.writableEnded) {
+                            res.write(`data: ${JSON.stringify({ type: 'progress', ...event })}\n\n`);
+                        }
+                    },
+                });
+
+                if (!res.writableEnded) {
+                    if (isStreaming) {
+                        res.write(`data: ${JSON.stringify({ type: 'result', status, payload: responseBody })}\n\n`);
+                        res.end();
+                    } else {
+                        res.statusCode = status;
+                        res.setHeader('Content-Type', 'application/json');
+                        res.end(JSON.stringify(responseBody));
+                    }
+                }
+            } catch (err: any) {
+                if (clientAbortController.signal.aborted || res.writableEnded) {
+                    return;
+                }
+                if (isStreaming) {
+                    res.write(`data: ${JSON.stringify({ type: 'error', error: 'Internal Server Error' })}\n\n`);
+                    res.end();
+                } else {
+                    res.statusCode = 500;
+                    res.setHeader('Content-Type', 'application/json');
+                    res.end(JSON.stringify({ success: false, error: 'Internal Server Error' }));
+                }
+            } finally {
+                res.removeListener('close', onClose);
+            }
+        });
+    };
+
     return {
         name: 'kalakriti-ai-middleware',
         configureServer(server) {
             server.middlewares.use('/api/transcribe-audio', handler);
             server.middlewares.use('/api/enhance-image', imageHandler);
+            server.middlewares.use('/api/opportunities/search', opportunitySearchHandler);
         },
         configurePreviewServer(server) {
             server.middlewares.use('/api/transcribe-audio', handler);
             server.middlewares.use('/api/enhance-image', imageHandler);
+            server.middlewares.use('/api/opportunities/search', opportunitySearchHandler);
         },
     };
 }
