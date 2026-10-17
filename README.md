@@ -304,7 +304,7 @@ Production Build: vite v8.2.2 built cleanly in ~390ms
 - **Upstream Network Dependency**: Live search and fetch require active outbound internet connectivity and valid API quotas from TinyFish and Google Gemini.
 - **ONDC Network Scope**: The included ONDC adapter is a compliant Beckn Retail v1.2.0 BPP implementation with cryptographic signing designed for sandbox evaluation; joining the live production network requires registry onboarding through an authorized ONDC registrar.
 
----
+----
 
 ## 11. Project Status & Contribution
 
